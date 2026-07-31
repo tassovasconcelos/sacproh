@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root {
+  --procirurgica-red: #e51b2b;
+  --procirurgica-red-dark: #b90f1d;
+  --procirurgica-charcoal: #202124;
+  --procirurgica-surface: #f6f6f6;
+}
+
+body {
+  background: var(--procirurgica-surface);
+  color: var(--procirurgica-charcoal);
+}
+
+::selection {
+  background: var(--procirurgica-red);
+  color: #fff;
+}
+

@@ -1,0 +1,6 @@
+{
+  "name": "GRIT SAC 4.0",
+  "description": "SaaS para registro, tratamento, acompanhamento e análise gerencial de SAC, assistência técnica, qualidade e pós-venda para Procirúrgica.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
