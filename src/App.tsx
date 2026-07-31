@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar, NavView } from './components/layout/Sidebar';
@@ -453,4 +452,3 @@ export default function App() {
     </div>
   );
 }
-
