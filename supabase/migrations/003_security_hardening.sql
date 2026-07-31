@@ -147,3 +147,4 @@ INSERT INTO roles (code, name, description) VALUES
   ('ADMIN_EMPRESA','Administrador da Empresa','Usuários e parâmetros da empresa')
 ON CONFLICT (code) DO UPDATE
 SET name = EXCLUDED.name, description = EXCLUDED.description;
+
