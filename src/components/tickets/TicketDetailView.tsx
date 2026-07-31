@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, Clock, AlertTriangle, ShieldCheck, CheckCircle2, MessageSquare, 
@@ -464,4 +463,3 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
     </div>
   );
 };
-
