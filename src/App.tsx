@@ -15,10 +15,11 @@ import { GritNewsPortal } from './components/grit/GritNewsPortal';
 import { AdminLoginModal } from './components/auth/AdminLoginModal';
 
 import { 
-  Tenant, UserRole, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder 
+  Tenant, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder
 } from './types';
 import { mockTenants, mockUsers, mockCustomers, mockProducts } from './lib/mockData';
 import { apiService } from './services/apiService';
+import { supabase } from './lib/supabase';
 
 export default function App() {
   // Check if current URL path includes /sacproh
@@ -107,10 +108,18 @@ export default function App() {
     loadAllData();
   }, [currentTenant.id]);
 
-  // Role Switcher Handler
-  const handleChangeRole = (role: UserRole) => {
-    setCurrentUser(prev => ({ ...prev, roleCode: role }));
-  };
+  useEffect(() => {
+    const restoreSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session?.user) return;
+      const profile = await apiService.getCurrentProfile(data.session.user.id);
+      if (profile) {
+        setCurrentUser(profile);
+        setIsAdminAuthenticated(['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode));
+      }
+    };
+    restoreSession();
+  }, []);
 
   // Ticket Created Handler
   const handleTicketCreated = (newTicket: Ticket) => {
@@ -193,7 +202,8 @@ export default function App() {
     );
   });
 
-  const handleAdminAuthSuccess = () => {
+  const handleAdminAuthSuccess = (profile: UserProfile) => {
+    setCurrentUser(profile);
     setIsAdminAuthenticated(true);
     setShowAdminLoginModal(false);
     navigateToApp();
@@ -233,7 +243,6 @@ export default function App() {
         currentTenant={currentTenant}
         onSelectTenant={setCurrentTenant}
         currentUser={currentUser}
-        onChangeRole={handleChangeRole}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -310,7 +319,7 @@ export default function App() {
               )}
 
               {currentView === 'import' && (
-                <SpreadsheetImporter />
+                <SpreadsheetImporter currentUser={currentUser} onImported={loadAllData} />
               )}
 
               {currentView === 'knowledge' && (
@@ -329,6 +338,7 @@ export default function App() {
                   onUpdateUser={handleUpdateUser}
                   onCreateUser={handleCreateUser}
                   onResetData={handleResetData}
+                  currentUser={currentUser}
                 />
               )}
 
@@ -340,6 +350,7 @@ export default function App() {
                   onUpdateUser={handleUpdateUser}
                   onCreateUser={handleCreateUser}
                   onResetData={handleResetData}
+                  currentUser={currentUser}
                 />
               )}
 
