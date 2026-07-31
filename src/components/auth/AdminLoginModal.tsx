@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 1 seconds
+Output:
 import React, { useEffect, useState } from 'react';
 import { ArrowRight, Key, Lock, Mail, ShieldAlert, X } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
@@ -16,10 +19,12 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mode, setMode] = useState<'login' | 'request-reset' | 'update-password'>('login');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [recoveryActive, setRecoveryActive] = useState(false);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
+        setRecoveryActive(true);
         setMode('update-password');
         setErrorMsg('');
         setSuccessMsg('Link validado. Defina sua nova senha.');
@@ -28,7 +33,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
     return () => data.subscription.unsubscribe();
   }, []);
 
-  if (!isOpen) return null;
+  if (!isOpen && !recoveryActive) return null;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -44,7 +49,10 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       setIsSubmitting(false);
       if (error) {
-        setErrorMsg('Não foi possível enviar a recuperação. Tente novamente.');
+        const isRateLimited = error.message.toLowerCase().includes('rate limit');
+        setErrorMsg(isRateLimited
+          ? 'Muitas solicitações foram feitas. Aguarde alguns minutos e tente novamente.'
+          : `Não foi possível enviar a recuperação: ${error.message}`);
         return;
       }
       setSuccessMsg('Enviamos um novo link de recuperação para seu e-mail.');
@@ -72,6 +80,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
       setPassword('');
       setPasswordConfirmation('');
       setMode('login');
+      setRecoveryActive(false);
       await supabase.auth.signOut();
       return;
     }
@@ -125,7 +134,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
               <p className="text-[11px] text-slate-400">Autenticação segura pelo Supabase</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar">
+          <button onClick={() => { setRecoveryActive(false); onClose(); }} className="p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar">
             <X className="w-5 h-5" />
           </button>
         </div>
