@@ -76,8 +76,8 @@ export default function App() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState<boolean>(false);
 
-  const [customers] = useState<Customer[]>(mockCustomers);
-  const [products] = useState<Product[]>(mockProducts);
+  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+  const [products, setProducts] = useState<Product[]>(mockProducts);
   const [qualityPlans, setQualityPlans] = useState<QualityActionPlan[]>([]);
   const [technicalCases, setTechnicalCases] = useState<TechnicalCase[]>([]);
   const [logisticsCases, setLogisticsCases] = useState<LogisticsCase[]>([]);
@@ -91,6 +91,12 @@ export default function App() {
 
     const fetchedUsers = await apiService.getUsers();
     setUsers(fetchedUsers);
+
+    const fetchedCustomers = await apiService.getCustomers();
+    setCustomers(fetchedCustomers);
+
+    const fetchedProducts = await apiService.getProducts();
+    setProducts(fetchedProducts);
 
     const qPlans = await apiService.getQualityPlans();
     setQualityPlans(qPlans);
@@ -400,6 +406,7 @@ export default function App() {
           customers={customers}
           products={products}
           currentTenantId={currentTenant.id}
+          currentUser={currentUser}
           onClose={() => setIsNewTicketModalOpen(false)}
           onTicketCreated={handleTicketCreated}
         />
