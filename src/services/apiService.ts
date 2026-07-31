@@ -436,7 +436,9 @@ export const apiService = {
       if (error || !data?.profile) {
         const { data: existing } = await supabase.from('profiles').select('*').ilike('email', userData.email.trim()).maybeSingle();
         if (existing) return profileFromDb(existing);
-        throw new Error(data?.error || error?.message || 'Não foi possível convidar o usuário.');
+        let functionMessage='';
+        try { functionMessage=(await (error as any)?.context?.json?.())?.error || ''; } catch { /* resposta sem JSON */ }
+        throw new Error(data?.error || functionMessage || error?.message || 'Não foi possível convidar o usuário.');
       }
       return profileFromDb(data.profile);
     }
