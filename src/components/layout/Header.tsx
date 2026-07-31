@@ -2,14 +2,13 @@ import React from 'react';
 import { 
   Building2, ShieldCheck, UserCheck, Bell, Search, Sparkles, AlertTriangle 
 } from 'lucide-react';
-import { Tenant, UserRole, UserProfile } from '../../types';
+import { Tenant, UserProfile } from '../../types';
 
 interface HeaderProps {
   tenants: Tenant[];
   currentTenant: Tenant;
   onSelectTenant: (tenant: Tenant) => void;
   currentUser: UserProfile;
-  onChangeRole: (role: UserRole) => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
 }
@@ -19,11 +18,10 @@ export const Header: React.FC<HeaderProps> = ({
   currentTenant,
   onSelectTenant,
   currentUser,
-  onChangeRole,
   searchQuery,
   onSearchChange
 }) => {
-  const rolesList: { code: UserRole; label: string }[] = [
+  const rolesList = [
     { code: 'SUPERADMIN', label: 'Superadmin GRIT' },
     { code: 'DIRETORIA', label: 'Diretoria Executiva' },
     { code: 'RESPONSAVEL_TECNICA', label: 'Resp. Técnica / Farmacêutica' },
@@ -87,21 +85,13 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right Controls & Profile */}
       <div className="flex items-center space-x-3">
-        {/* Role Switcher Test Simulator */}
+        {/* Perfil vinculado à sessão autenticada */}
         <div className="flex items-center bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">
           <ShieldCheck className="w-3.5 h-3.5 text-[#E51B2B] mr-2" />
           <span className="text-slate-400 mr-1 hidden sm:inline">Perfil:</span>
-          <select 
-            value={currentUser.roleCode} 
-            onChange={(e) => onChangeRole(e.target.value as UserRole)}
-            className="bg-transparent text-slate-100 font-semibold outline-none cursor-pointer pr-1"
-          >
-            {rolesList.map(r => (
-              <option key={r.code} value={r.code} className="bg-slate-900 text-white">
-                {r.label}
-              </option>
-            ))}
-          </select>
+          <span className="text-slate-100 font-semibold">
+            {rolesList.find(r => r.code === currentUser.roleCode)?.label || currentUser.roleCode}
+          </span>
         </div>
 
         {/* Notifications Icon */}
