@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   Building2, ShieldCheck, Users, Clock, History, Check, Lock, Key, 
@@ -43,6 +44,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [newJobTitle, setNewJobTitle] = useState('');
   const [newDepartment, setNewDepartment] = useState('');
   const [userMessage, setUserMessage] = useState('');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   const filteredUsers = users.filter(u => 
     u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -53,6 +55,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserMessage('');
+    setIsCreatingUser(true);
     try { await onCreateUser({
       tenantId: currentTenant.id,
       fullName: newFullName,
@@ -71,6 +74,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     setNewJobTitle('');
     setNewDepartment('');
     } catch (error) { setUserMessage(error instanceof Error ? error.message : 'Não foi possível cadastrar o usuário.'); }
+    finally { setIsCreatingUser(false); }
   };
 
   const handleSaveUserEdit = (e: React.FormEvent) => {
@@ -489,8 +493,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
               </div>
 
               <div className="flex justify-end space-x-2 pt-3 border-t">
-                <button type="button" onClick={() => setShowAddUserModal(false)} className="px-4 py-2 bg-slate-200 font-bold rounded-lg">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-[#145EDB] text-white font-bold rounded-lg">Cadastrar Usuário</button>
+                <button type="button" disabled={isCreatingUser} onClick={() => setShowAddUserModal(false)} className="px-4 py-2 bg-slate-200 font-bold rounded-lg disabled:opacity-50">Cancelar</button>
+                <button type="submit" disabled={isCreatingUser} className="px-4 py-2 bg-[#145EDB] text-white font-bold rounded-lg disabled:opacity-60 min-w-36">{isCreatingUser ? 'Enviando convite...' : 'Cadastrar Usuário'}</button>
               </div>
             </form>
           </div>
