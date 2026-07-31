@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowRight, Key, Lock, Mail, ShieldAlert, X } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
+import { UserProfile } from '../../types';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (profile: UserProfile) => void;
 }
 
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClose, onSuccess }) => {
@@ -102,7 +103,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('role_code, is_active')
+        .select('tenant_id, unit_id, full_name, email, phone, job_title, department, employee_code, manager_name, notes, role_code, avatar_url, is_active, last_access_at')
         .eq('id', data.user.id)
         .single();
 
@@ -112,7 +113,23 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
         setErrorMsg('Seu usuário não possui permissão administrativa ativa.');
         return;
       }
-      onSuccess();
+      onSuccess({
+        id: data.user.id,
+        tenantId: profile.tenant_id,
+        unitId: profile.unit_id || undefined,
+        fullName: profile.full_name,
+        email: profile.email,
+        phone: profile.phone || undefined,
+        jobTitle: profile.job_title || undefined,
+        department: profile.department || undefined,
+        employeeCode: profile.employee_code || undefined,
+        managerName: profile.manager_name || undefined,
+        notes: profile.notes || undefined,
+        roleCode: profile.role_code,
+        avatarUrl: profile.avatar_url || undefined,
+        isActive: profile.is_active,
+        lastAccessAt: profile.last_access_at || undefined
+      });
     } catch {
       setErrorMsg('Não foi possível autenticar agora. Tente novamente.');
     } finally {
