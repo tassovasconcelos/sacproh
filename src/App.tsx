@@ -17,7 +17,7 @@ import { AdminLoginModal } from './components/auth/AdminLoginModal';
 import { 
   Tenant, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder
 } from './types';
-import { mockTenants, mockUsers, mockCustomers, mockProducts } from './lib/mockData';
+import { mockTenants, mockCustomers, mockProducts } from './lib/mockData';
 import { apiService } from './services/apiService';
 import { supabase } from './lib/supabase';
 
@@ -69,7 +69,7 @@ export default function App() {
   const [tenants] = useState<Tenant[]>(mockTenants);
   const [currentTenant, setCurrentTenant] = useState<Tenant>(mockTenants[0]);
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [currentUser, setCurrentUser] = useState<UserProfile>(mockUsers[0]);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   // Data Store
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -130,6 +130,7 @@ export default function App() {
 
   // Ticket Status Updated Handler
   const handleUpdateStatus = async (ticketId: string, newStatus: TicketStatus, notes: string) => {
+    if (!currentUser) return;
     const updated = await apiService.updateTicketStatus(ticketId, newStatus, notes, currentUser.id);
     if (updated) {
       setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus } : t));
@@ -147,6 +148,7 @@ export default function App() {
     assignedToName?: string, 
     notes?: string
   ) => {
+    if (!currentUser) return;
     const updated = await apiService.dispatchTicket(ticketId, assignedArea, assignedToId, assignedToName, notes, currentUser.email);
     if (updated) {
       setTickets(prev => prev.map(t => t.id === ticketId ? { ...updated } : t));
@@ -204,14 +206,15 @@ export default function App() {
 
   const handleAdminAuthSuccess = (profile: UserProfile) => {
     setCurrentUser(profile);
-    setIsAdminAuthenticated(true);
+    const hasAdminAccess = ['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode);
+    setIsAdminAuthenticated(hasAdminAccess);
     setShowAdminLoginModal(false);
     navigateToApp();
-    if (pendingAdminView) {
+    if (pendingAdminView && hasAdminAccess) {
       setCurrentView(pendingAdminView);
       setPendingAdminView(null);
     } else {
-      setCurrentView('settings');
+      setCurrentView(hasAdminAccess ? 'settings' : 'dashboard');
     }
   };
 
@@ -233,6 +236,12 @@ export default function App() {
         />
       </>
     );
+  }
+
+  if (!currentUser) {
+    return <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
+      <AdminLoginModal isOpen onClose={navigateToPortal} onSuccess={handleAdminAuthSuccess} />
+    </div>;
   }
 
   return (
