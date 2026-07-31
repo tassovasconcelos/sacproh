@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   Building2, ShieldCheck, Users, Clock, History, Check, Lock, Key, 
@@ -45,6 +44,21 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [newDepartment, setNewDepartment] = useState('');
   const [userMessage, setUserMessage] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [passwordSendingTo, setPasswordSendingTo] = useState('');
+  const [passwordCooldowns, setPasswordCooldowns] = useState<Record<string,number>>({});
+
+  const sendPasswordEmail = async (email: string) => {
+    if ((passwordCooldowns[email] || 0) > Date.now()) return;
+    setPasswordSendingTo(email); setUserMessage('');
+    try {
+      await apiService.sendPasswordReset(email);
+      setPasswordCooldowns(previous=>({...previous,[email]:Date.now()+60*60*1000}));
+      setUserMessage(`E-mail de definição de senha enviado para ${email}. Novo envio ficará disponível em 1 hora.`);
+    } catch(error) {
+      setPasswordCooldowns(previous=>({...previous,[email]:Date.now()+10*60*1000}));
+      setUserMessage(error instanceof Error?error.message:'Falha no envio.');
+    } finally { setPasswordSendingTo(''); }
+  };
 
   const filteredUsers = users.filter(u => 
     u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -240,9 +254,9 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                             <Edit3 className="w-3.5 h-3.5" />
                             <span>Editar Perfil</span>
                           </button>
-                          <button type="button" onClick={async()=>{try{await apiService.sendPasswordReset(u.email);setUserMessage(`E-mail de redefinição enviado para ${u.email}.`);}catch(error){setUserMessage(error instanceof Error?error.message:'Falha no envio.');}}}
-                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-[#145EDB] rounded-lg font-bold inline-flex items-center space-x-1">
-                            <Key className="w-3.5 h-3.5" /><span>Enviar senha</span>
+                          <button type="button" disabled={passwordSendingTo===u.email || (passwordCooldowns[u.email]||0)>Date.now()} onClick={()=>sendPasswordEmail(u.email)}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-[#145EDB] rounded-lg font-bold inline-flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Key className="w-3.5 h-3.5" /><span>{passwordSendingTo===u.email?'Enviando...':(passwordCooldowns[u.email]||0)>Date.now()?'Aguardar':'Enviar senha'}</span>
                           </button>
                         </td>
                       </tr>
@@ -538,4 +552,3 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     </div>
   );
 };
-
