@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Search, Filter, Plus, Clock, AlertTriangle, Eye, CheckCircle2, 
   XCircle, ArrowRight, LayoutGrid, Table, ChevronRight, Package 
@@ -20,6 +20,8 @@ export const TicketList: React.FC<TicketListProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
 
   const filteredTickets = tickets.filter(t => {
     if (statusFilter !== 'ALL' && t.status !== statusFilter) return false;
@@ -32,6 +34,10 @@ export const TicketList: React.FC<TicketListProps> = ({
     ].some(value => value?.toLocaleLowerCase('pt-BR').includes(search))) return false;
     return true;
   });
+  const totalPages = Math.max(1, Math.ceil(filteredTickets.length / pageSize));
+  const visibleTickets = filteredTickets.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => setPage(1), [statusFilter, priorityFilter, searchTerm, viewMode]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const renderSla = (ticket: Ticket) => {
     if (!ticket.slaDueAt) return <span className="text-slate-400">Não definido</span>;
@@ -178,7 +184,7 @@ export const TicketList: React.FC<TicketListProps> = ({
         </div>
 
         <div className="ml-auto text-slate-500 font-medium">
-          Exibindo <strong>{filteredTickets.length}</strong> chamados
+          Exibindo <strong>{filteredTickets.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, filteredTickets.length)}</strong> de <strong>{filteredTickets.length}</strong> chamados
         </div>
       </div>
 
@@ -200,7 +206,7 @@ export const TicketList: React.FC<TicketListProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-800">
-                {filteredTickets.map(ticket => (
+                {visibleTickets.map(ticket => (
                   <tr 
                     key={ticket.id} 
                     onClick={() => onSelectTicket(ticket)}
@@ -260,7 +266,7 @@ export const TicketList: React.FC<TicketListProps> = ({
       {viewMode === 'kanban' && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {['NEW', 'TECHNICAL_ANALYSIS', 'SENT_TO_LOGISTICS', 'CLOSED_PROCEDENT'].map(colStatus => {
-            const colTickets = filteredTickets.filter(t => t.status === colStatus || (colStatus === 'TECHNICAL_ANALYSIS' && t.status === 'TRIAGE'));
+            const colTickets = visibleTickets.filter(t => t.status === colStatus || (colStatus === 'TECHNICAL_ANALYSIS' && t.status === 'TRIAGE'));
             return (
               <div key={colStatus} className="bg-slate-100/80 p-3 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-200 font-bold text-xs text-slate-700">
@@ -300,7 +306,13 @@ export const TicketList: React.FC<TicketListProps> = ({
           })}
         </div>
       )}
+      {totalPages > 1 && <nav aria-label="Paginação dos chamados" className="flex items-center justify-center gap-3 bg-white border border-slate-200 rounded-xl p-3 text-xs">
+        <button type="button" disabled={page === 1} onClick={() => setPage(value => Math.max(1, value - 1))}
+          className="px-3 py-2 rounded-lg border font-bold disabled:opacity-40">Anterior</button>
+        <span>Página <strong>{page}</strong> de <strong>{totalPages}</strong></span>
+        <button type="button" disabled={page === totalPages} onClick={() => setPage(value => Math.min(totalPages, value + 1))}
+          className="px-3 py-2 rounded-lg border font-bold disabled:opacity-40">Próxima</button>
+      </nav>}
     </div>
   );
 };
-
