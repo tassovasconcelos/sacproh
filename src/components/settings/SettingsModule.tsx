@@ -5,13 +5,14 @@ import {
 } from 'lucide-react';
 import { Tenant, UserProfile, UserRole } from '../../types';
 import { SpreadsheetImporter } from '../import/SpreadsheetImporter';
+import { apiService } from '../../services/apiService';
 
 interface SettingsModuleProps {
   tenants: Tenant[];
   currentTenant: Tenant;
   users: UserProfile[];
   onUpdateUser: (userId: string, data: Partial<UserProfile>) => void;
-  onCreateUser: (userData: Omit<UserProfile, 'id'>) => void;
+  onCreateUser: (userData: Omit<UserProfile, 'id'>) => Promise<void>;
   onResetData: () => Promise<void>;
   currentUser: UserProfile;
 }
@@ -41,6 +42,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [newRole, setNewRole] = useState<UserRole>('SAC');
   const [newJobTitle, setNewJobTitle] = useState('');
   const [newDepartment, setNewDepartment] = useState('');
+  const [userMessage, setUserMessage] = useState('');
 
   const filteredUsers = users.filter(u => 
     u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -48,9 +50,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     u.roleCode.toLowerCase().includes(userSearch.toLowerCase())
   );
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    onCreateUser({
+    setUserMessage('');
+    try { await onCreateUser({
       tenantId: currentTenant.id,
       fullName: newFullName,
       email: newEmail,
@@ -60,12 +63,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       roleCode: newRole,
       isActive: true
     });
+    setUserMessage('Usuário cadastrado. O convite para definir a senha foi enviado por e-mail.');
     setShowAddUserModal(false);
     setNewFullName('');
     setNewEmail('');
     setNewPhone('');
     setNewJobTitle('');
     setNewDepartment('');
+    } catch (error) { setUserMessage(error instanceof Error ? error.message : 'Não foi possível cadastrar o usuário.'); }
   };
 
   const handleSaveUserEdit = (e: React.FormEvent) => {
@@ -173,6 +178,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           {/* TAB 1: USERS & PROFILES MANAGEMENT */}
           {activeTab === 'users' && (
             <div className="space-y-4">
+              {userMessage && <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-semibold">{userMessage}</div>}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="relative flex-1 max-w-md w-full">
                   <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
@@ -229,6 +235,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                             <span>Editar Perfil</span>
+                          </button>
+                          <button type="button" onClick={async()=>{try{await apiService.sendPasswordReset(u.email);setUserMessage(`E-mail de redefinição enviado para ${u.email}.`);}catch(error){setUserMessage(error instanceof Error?error.message:'Falha no envio.');}}}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-[#145EDB] rounded-lg font-bold inline-flex items-center space-x-1">
+                            <Key className="w-3.5 h-3.5" /><span>Enviar senha</span>
                           </button>
                         </td>
                       </tr>
