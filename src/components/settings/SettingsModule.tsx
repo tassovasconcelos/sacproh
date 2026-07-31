@@ -13,6 +13,7 @@ interface SettingsModuleProps {
   onUpdateUser: (userId: string, data: Partial<UserProfile>) => void;
   onCreateUser: (userData: Omit<UserProfile, 'id'>) => void;
   onResetData: () => Promise<void>;
+  currentUser: UserProfile;
 }
 
 export const SettingsModule: React.FC<SettingsModuleProps> = ({ 
@@ -21,7 +22,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   users,
   onUpdateUser,
   onCreateUser,
-  onResetData
+  onResetData,
+  currentUser
 }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'import' | 'reset' | 'roles' | 'tenants'>('users');
   const [userSearch, setUserSearch] = useState('');
@@ -37,6 +39,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('SAC');
+  const [newJobTitle, setNewJobTitle] = useState('');
+  const [newDepartment, setNewDepartment] = useState('');
 
   const filteredUsers = users.filter(u => 
     u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -51,6 +55,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       fullName: newFullName,
       email: newEmail,
       phone: newPhone,
+      jobTitle: newJobTitle,
+      department: newDepartment,
       roleCode: newRole,
       isActive: true
     });
@@ -58,6 +64,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     setNewFullName('');
     setNewEmail('');
     setNewPhone('');
+    setNewJobTitle('');
+    setNewDepartment('');
   };
 
   const handleSaveUserEdit = (e: React.FormEvent) => {
@@ -66,6 +74,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     onUpdateUser(editingUser.id, {
       fullName: editingUser.fullName,
       email: editingUser.email,
+      phone: editingUser.phone,
+      jobTitle: editingUser.jobTitle,
+      department: editingUser.department,
+      employeeCode: editingUser.employeeCode,
+      managerName: editingUser.managerName,
+      notes: editingUser.notes,
       roleCode: editingUser.roleCode,
       isActive: editingUser.isActive
     });
@@ -227,7 +241,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
           {/* TAB 2: SPREADSHEET IMPORTER */}
           {activeTab === 'import' && (
-            <SpreadsheetImporter />
+            <SpreadsheetImporter currentUser={currentUser} />
           )}
 
           {/* TAB 3: ZERAR INFORMAÇÕES (DATABASE RESET) */}
@@ -361,6 +375,29 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                 </select>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block font-bold">Cargo
+                  <input value={editingUser.jobTitle || ''} onChange={e => setEditingUser({ ...editingUser, jobTitle: e.target.value })} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" />
+                </label>
+                <label className="block font-bold">Departamento
+                  <input value={editingUser.department || ''} onChange={e => setEditingUser({ ...editingUser, department: e.target.value })} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" />
+                </label>
+                <label className="block font-bold">Telefone
+                  <input value={editingUser.phone || ''} onChange={e => setEditingUser({ ...editingUser, phone: e.target.value })} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" />
+                </label>
+                <label className="block font-bold">Matrícula
+                  <input value={editingUser.employeeCode || ''} onChange={e => setEditingUser({ ...editingUser, employeeCode: e.target.value })} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" />
+                </label>
+              </div>
+
+              <label className="block font-bold">Gestor responsável
+                <input value={editingUser.managerName || ''} onChange={e => setEditingUser({ ...editingUser, managerName: e.target.value })} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" />
+              </label>
+
+              <label className="block font-bold">Observações de gestão
+                <textarea value={editingUser.notes || ''} onChange={e => setEditingUser({ ...editingUser, notes: e.target.value })} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" rows={2} />
+              </label>
+
               <div className="flex items-center space-x-2 pt-1">
                 <input
                   type="checkbox"
@@ -432,6 +469,15 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                 </select>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block font-bold">Cargo
+                  <input value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" />
+                </label>
+                <label className="block font-bold">Departamento
+                  <input value={newDepartment} onChange={e => setNewDepartment(e.target.value)} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" />
+                </label>
+              </div>
+
               <div className="flex justify-end space-x-2 pt-3 border-t">
                 <button type="button" onClick={() => setShowAddUserModal(false)} className="px-4 py-2 bg-slate-200 font-bold rounded-lg">Cancelar</button>
                 <button type="submit" className="px-4 py-2 bg-[#145EDB] text-white font-bold rounded-lg">Cadastrar Usuário</button>
@@ -478,3 +524,4 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     </div>
   );
 };
+
