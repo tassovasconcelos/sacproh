@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar, NavView } from './components/layout/Sidebar';
 import { TicketList } from './components/tickets/TicketList';
 import { NewTicketModal } from './components/tickets/NewTicketModal';
 import { TicketDetailView } from './components/tickets/TicketDetailView';
-import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
-import { QualityModule } from './components/quality/QualityModule';
-import { TechnicalModule } from './components/technical/TechnicalModule';
-import { LogisticsModule } from './components/logistics/LogisticsModule';
-import { SpreadsheetImporter } from './components/import/SpreadsheetImporter';
-import { KnowledgeBase } from './components/knowledge/KnowledgeBase';
-import { SettingsModule } from './components/settings/SettingsModule';
-import { GritNewsPortal } from './components/grit/GritNewsPortal';
-import { AdminLoginModal } from './components/auth/AdminLoginModal';
+const ExecutiveDashboard = lazy(() => import('./components/dashboard/ExecutiveDashboard').then(module => ({ default: module.ExecutiveDashboard })));
+const QualityModule = lazy(() => import('./components/quality/QualityModule').then(module => ({ default: module.QualityModule })));
+const TechnicalModule = lazy(() => import('./components/technical/TechnicalModule').then(module => ({ default: module.TechnicalModule })));
+const LogisticsModule = lazy(() => import('./components/logistics/LogisticsModule').then(module => ({ default: module.LogisticsModule })));
+const SpreadsheetImporter = lazy(() => import('./components/import/SpreadsheetImporter').then(module => ({ default: module.SpreadsheetImporter })));
+const KnowledgeBase = lazy(() => import('./components/knowledge/KnowledgeBase').then(module => ({ default: module.KnowledgeBase })));
+const SettingsModule = lazy(() => import('./components/settings/SettingsModule').then(module => ({ default: module.SettingsModule })));
+const GritNewsPortal = lazy(() => import('./components/grit/GritNewsPortal').then(module => ({ default: module.GritNewsPortal })));
+const AdminLoginModal = lazy(() => import('./components/auth/AdminLoginModal').then(module => ({ default: module.AdminLoginModal })));
+
+const ModuleLoading = () => <div className="min-h-[240px] flex items-center justify-center text-sm font-semibold text-slate-500">Carregando módulo...</div>;
 
 import { 
   Tenant, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder, Carrier, AuditLog
@@ -88,35 +90,16 @@ export default function App() {
   // Load Initial Data
   const loadAllData = async (tenantId?: string) => {
     const effectiveTenantId = tenantId || currentUser?.tenantId || currentTenant.id;
-    const fetchedTickets = await apiService.getTickets({ tenantId: effectiveTenantId });
-    setTickets(fetchedTickets);
-
-    const fetchedUsers = await apiService.getUsers();
-    setUsers(fetchedUsers);
-
-    const fetchedCustomers = await apiService.getCustomers();
-    setCustomers(fetchedCustomers);
-
-    const fetchedProducts = await apiService.getProducts();
-    setProducts(fetchedProducts);
-
-    const fetchedCarriers = await apiService.getCarriers();
-    setCarriers(fetchedCarriers);
-
-    const qPlans = await apiService.getQualityPlans();
-    setQualityPlans(qPlans);
-
-    const tCases = await apiService.getTechnicalCases();
-    setTechnicalCases(tCases);
-
-    const lCases = await apiService.getLogisticsCases();
-    setLogisticsCases(lCases);
-
-    const sOrders = await apiService.getServiceOrders();
-    setServiceOrders(sOrders);
-
-    const logs = await apiService.getAuditLogs();
-    setAuditLogs(logs);
+    const [fetchedTickets, fetchedUsers, fetchedCustomers, fetchedProducts, fetchedCarriers,
+      qPlans, tCases, lCases, sOrders, logs] = await Promise.all([
+      apiService.getTickets({ tenantId: effectiveTenantId }), apiService.getUsers(),
+      apiService.getCustomers(), apiService.getProducts(), apiService.getCarriers(),
+      apiService.getQualityPlans(), apiService.getTechnicalCases(), apiService.getLogisticsCases(),
+      apiService.getServiceOrders(), apiService.getAuditLogs()
+    ]);
+    setTickets(fetchedTickets); setUsers(fetchedUsers); setCustomers(fetchedCustomers);
+    setProducts(fetchedProducts); setCarriers(fetchedCarriers); setQualityPlans(qPlans);
+    setTechnicalCases(tCases); setLogisticsCases(lCases); setServiceOrders(sOrders); setAuditLogs(logs);
   };
 
   useEffect(() => {
@@ -261,7 +244,7 @@ export default function App() {
 
   if (appMode === 'portal') {
     return (
-      <>
+      <Suspense fallback={<ModuleLoading />}>
         <GritNewsPortal
           onGoToSAC={() => navigateToApp()}
           onOpenAdminLogin={() => {
@@ -275,18 +258,18 @@ export default function App() {
           onClose={() => setShowAdminLoginModal(false)}
           onSuccess={handleAdminAuthSuccess}
         />
-      </>
+      </Suspense>
     );
   }
 
   if (!currentUser) {
-    return <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
+    return <Suspense fallback={<ModuleLoading />}><div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
       <AdminLoginModal isOpen onClose={navigateToPortal} onSuccess={handleAdminAuthSuccess} />
-    </div>;
+    </div></Suspense>;
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F9FC] text-[#10233F] font-sans antialiased flex flex-col">
+    <Suspense fallback={<ModuleLoading />}><div className="min-h-screen bg-[#F7F9FC] text-[#10233F] font-sans antialiased flex flex-col">
       {/* Top Header */}
       <Header
         tenants={tenants}
@@ -449,6 +432,6 @@ export default function App() {
         onClose={() => setShowAdminLoginModal(false)}
         onSuccess={handleAdminAuthSuccess}
       />
-    </div>
+    </div></Suspense>
   );
 }
