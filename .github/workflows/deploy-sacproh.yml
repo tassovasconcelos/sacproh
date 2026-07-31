@@ -44,11 +44,11 @@ jobs:
         run: pnpm run build:web
 
       - name: Publicar em gritnews.com.br/sacproh
-        uses: SamKirsch/ftp-deploy-action@v4.3.5
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: dist/
-          server-dir: public_html/sacproh/
+          server-dir: /sacproh/
           dangerous-clean-slate: false

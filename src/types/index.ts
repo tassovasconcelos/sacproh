@@ -32,6 +32,11 @@ export interface UserProfile {
   fullName: string;
   email: string;
   phone?: string;
+  jobTitle?: string;
+  department?: string;
+  employeeCode?: string;
+  managerName?: string;
+  notes?: string;
   roleCode: UserRole;
   avatarUrl?: string;
   isActive: boolean;
