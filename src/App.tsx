@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar, NavView } from './components/layout/Sidebar';
@@ -183,6 +184,29 @@ export default function App() {
     setTechnicalCases(tCases);
   };
 
+  const handleUpdateTicket = async (ticket: Ticket, changes: Partial<Ticket>) => {
+    if (!currentUser) return;
+    const updated = await apiService.updateTicket(ticket, changes, currentUser);
+    setTickets(previous => previous.map(item => item.id === updated.id ? updated : item));
+    setSelectedTicket(updated);
+  };
+
+  const handleDeleteTicket = async (ticket: Ticket, reason: string) => {
+    await apiService.deleteTicket(ticket, reason);
+    setTickets(previous => previous.filter(item => item.id !== ticket.id));
+    setSelectedTicket(null);
+  };
+
+  const handleUpdateOS = async (order: ServiceOrder, changes: Partial<ServiceOrder>) => {
+    const updated = await apiService.updateServiceOrder(order, changes);
+    setServiceOrders(previous => previous.map(item => item.id === updated.id ? updated : item));
+  };
+
+  const handleDeleteOS = async (order: ServiceOrder, reason: string) => {
+    await apiService.deleteServiceOrder(order, reason);
+    setServiceOrders(previous => previous.filter(item => item.id !== order.id));
+  };
+
   // User Management Handlers
   const handleCreateUser = async (userData: Omit<UserProfile, 'id'>) => {
     const created = await apiService.createUser(userData);
@@ -310,6 +334,8 @@ export default function App() {
               onUpdateStatus={handleUpdateStatus}
               onDispatch={handleDispatchTicket}
               onCreateOS={handleCreateOS}
+              onUpdateTicket={handleUpdateTicket}
+              onDeleteTicket={handleDeleteTicket}
             />
           ) : (
             <>
@@ -339,6 +365,8 @@ export default function App() {
                   tickets={tickets}
                   users={users}
                   onCreateOS={handleCreateOS}
+                  onUpdateOS={handleUpdateOS}
+                  onDeleteOS={handleDeleteOS}
                 />
               )}
 
