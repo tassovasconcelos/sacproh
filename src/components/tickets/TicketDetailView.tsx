@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, Clock, AlertTriangle, ShieldCheck, CheckCircle2, MessageSquare, 
   Paperclip, Wrench, Truck, Sparkles, DollarSign, Award, History, FileText, Send, Building, User, Package, Plus 
 } from 'lucide-react';
-import { Ticket, TicketStatus, UserRole, UserProfile, ServiceOrder } from '../../types';
+import { Ticket, TicketStatus, UserRole, UserProfile, ServiceOrder, TicketQualificationStage } from '../../types';
 import { apiService } from '../../services/apiService';
 import { DispatchTicketModal } from './DispatchTicketModal';
 import { NewServiceOrderModal } from '../technical/NewServiceOrderModal';
 
 interface TicketDetailViewProps {
   ticket: Ticket;
+  currentUser: UserProfile;
   userRole: UserRole;
   users: UserProfile[];
   onBack: () => void;
@@ -20,6 +21,7 @@ interface TicketDetailViewProps {
 
 export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
   ticket,
+  currentUser,
   userRole,
   users,
   onBack,
@@ -33,6 +35,17 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
 
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [showOSModal, setShowOSModal] = useState(false);
+  const [qualificationStage, setQualificationStage] = useState<TicketQualificationStage>(ticket.qualificationStage || 'REGISTRATION');
+  const [qualificationNotes, setQualificationNotes] = useState(ticket.qualificationNotes || '');
+  const [qualificationMessage, setQualificationMessage] = useState('');
+  const [attachments, setAttachments] = useState<Array<{id:string;fileName:string;fileType:string;fileSize:number;url:string}>>([]);
+
+  useEffect(() => { apiService.getTicketAttachments(ticket.id).then(setAttachments); }, [ticket.id]);
+
+  const saveQualification = async () => {
+    await apiService.updateTicketQualification(ticket.id, qualificationStage, qualificationNotes, currentUser);
+    setQualificationMessage('Qualificação atualizada e registrada no histórico.');
+  };
 
   // AI Assistant Outputs
   const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -252,6 +265,22 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
                 <p className="text-slate-700 leading-relaxed text-xs">{ticket.description}</p>
               </div>
 
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 space-y-3">
+                <div><h4 className="font-bold text-sm text-[#10233F]">Qualificação progressiva do SAC</h4>
+                  <p className="text-slate-500 mt-0.5">Atualize a maturidade do atendimento conforme a análise evolui.</p></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <select value={qualificationStage} onChange={e=>setQualificationStage(e.target.value as TicketQualificationStage)} className="bg-white border border-blue-200 rounded-lg p-2">
+                    <option value="REGISTRATION">1. Registro inicial</option><option value="DOCUMENT_VALIDATION">2. Validação documental</option>
+                    <option value="TECHNICAL_TRIAGE">3. Triagem técnica</option><option value="INVESTIGATION">4. Investigação</option>
+                    <option value="ACTION_PLAN">5. Plano de ação</option><option value="SOLUTION_VALIDATION">6. Validação da solução</option>
+                    <option value="COMPLETED">7. Qualificação concluída</option>
+                  </select>
+                  <input value={qualificationNotes} onChange={e=>setQualificationNotes(e.target.value)} placeholder="Evidências, pendências e conclusão da etapa" className="md:col-span-2 bg-white border border-blue-200 rounded-lg p-2" />
+                </div>
+                <div className="flex items-center justify-between"><span className="text-emerald-700 font-semibold">{qualificationMessage}</span>
+                  <button type="button" onClick={saveQualification} className="bg-[#145EDB] text-white font-bold px-4 py-2 rounded-lg">Salvar qualificação</button></div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                   <h4 className="font-bold text-slate-800">Classificação Comercial</h4>
@@ -259,6 +288,7 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
                   <p><strong>Nota Fiscal:</strong> {ticket.invoiceNumber}</p>
                   <p><strong>Vendedor:</strong> {ticket.sellerName}</p>
                   <p><strong>Canal de Venda:</strong> {ticket.salesChannel}</p>
+                  <p><strong>Transportadora:</strong> {ticket.carrierName || 'Não definida'}</p>
                 </div>
 
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
@@ -356,6 +386,17 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
           )}
 
           {/* TAB 7: ASSISTÊNCIA TÉCNICA */}
+          {activeTab === 'attachments' && (
+            <div className="space-y-3">
+              <h4 className="font-bold text-sm text-[#10233F]">Evidências anexadas ao chamado</h4>
+              {attachments.length === 0 ? <p className="p-6 text-center bg-slate-50 rounded-xl text-slate-500">Nenhuma imagem ou vídeo anexado.</p> :
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">{attachments.map(file => <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:border-[#145EDB]">
+                  <Paperclip className="w-5 h-5 text-[#145EDB] mb-2" /><p className="font-bold break-all">{file.fileName}</p><p className="text-slate-500">{file.fileType} • {(file.fileSize/1024/1024).toFixed(2)} MB</p>
+                </a>)}</div>}
+            </div>
+          )}
+
+          {/* TAB 7: ASSISTÊNCIA TÉCNICA */}
           {activeTab === 'technical' && (
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
@@ -370,7 +411,7 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
           )}
 
           {/* OTHER TABS FALLBACK */}
-          {activeTab !== 'overview' && activeTab !== 'customer' && activeTab !== 'products' && activeTab !== 'comments' && activeTab !== 'technical' && (
+          {activeTab !== 'overview' && activeTab !== 'customer' && activeTab !== 'products' && activeTab !== 'comments' && activeTab !== 'attachments' && activeTab !== 'technical' && (
             <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-slate-500">
               <p className="font-bold text-sm text-[#10233F] mb-1">Módulo {activeTab.toUpperCase()} Carregado</p>
               <p className="text-xs">Dados e registros do protocolo {ticket.protocol} sincronizados via Supabase PostgreSQL.</p>
@@ -403,3 +444,4 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
     </div>
   );
 };
+
