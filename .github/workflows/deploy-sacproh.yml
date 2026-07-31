@@ -32,16 +32,16 @@ jobs:
           run_install: false
 
       - name: Instalar dependências
-        run: pnpm install --frozen-lockfile
+        run: npm install --no-audit --no-fund
 
       - name: Validar TypeScript
-        run: pnpm run lint
+        run: npm run lint
 
       - name: Compilar aplicação web
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-        run: pnpm run build:web
+        run: npm run build:web
 
       - name: Publicar em gritnews.com.br/sacproh
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
