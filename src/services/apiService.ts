@@ -17,11 +17,54 @@ let localAuditLogs = [...mockAuditLogs];
 let localUsers = [...mockUsers];
 let localServiceOrders = [...mockServiceOrders];
 
+export interface HistoricalImportTicket {
+  protocol: string;
+  customerName: string;
+  customerDocument?: string;
+  category: string;
+  description: string;
+  status: string;
+  priority: string;
+  invoiceNumber?: string;
+  openedAt?: string;
+  items: Array<{ productName: string; sku?: string; quantity: number; lotNumber?: string; serialNumber?: string }>;
+}
+
+const profileFromDb = (row: any): UserProfile => ({
+  id: row.id, tenantId: row.tenant_id, unitId: row.unit_id || undefined,
+  fullName: row.full_name, email: row.email, phone: row.phone || undefined,
+  jobTitle: row.job_title || undefined, department: row.department || undefined,
+  employeeCode: row.employee_code || undefined, managerName: row.manager_name || undefined,
+  notes: row.notes || undefined, roleCode: row.role_code, avatarUrl: row.avatar_url || undefined,
+  isActive: row.is_active, lastAccessAt: row.last_access_at || undefined
+});
+
+const ticketFromDb = (row: any): Ticket => ({
+  id: row.id, tenantId: row.tenant_id, protocol: row.protocol, unitId: row.unit_id || undefined,
+  customerId: row.customer_id || '', customerName: row.customer?.name || row.customer_name || 'Cliente não identificado',
+  customerDocument: row.customer?.document || row.customer_document || '', sellerName: row.seller_name || undefined,
+  invoiceNumber: row.invoice_number || undefined, purchaseDate: row.purchase_date || undefined,
+  deliveryDate: row.delivery_date || undefined, salesChannel: row.sales_channel || undefined,
+  description: row.description, category: row.category, subcategory: row.subcategory || undefined,
+  classification: row.classification || undefined, priority: row.priority, urgency: row.urgency,
+  impact: row.impact, initialProcedency: row.initial_procedency, userRiskFlag: row.user_risk_flag,
+  adverseEventFlag: row.adverse_event_flag, damageFlag: row.damage_flag, readyForCollection: row.ready_for_collection,
+  status: row.status, assignedTo: row.assigned_to || undefined, assignedArea: row.assigned_area || undefined,
+  slaDueAt: row.sla_due_at || undefined, firstResponseAt: row.first_response_at || undefined,
+  resolvedAt: row.resolved_at || undefined, closedAt: row.closed_at || undefined,
+  finalOpinion: row.final_opinion || undefined, finalProcedency: row.final_procedency || undefined,
+  createdBy: row.created_by, createdByName: row.created_by_name || 'Usuário do SAC', createdAt: row.created_at, updatedAt: row.updated_at,
+  items: (row.items || []).map((i:any) => ({ id:i.id, ticketId:i.ticket_id, productId:i.product_id || undefined,
+    productName:i.product_name, sku:i.sku || undefined, quantity:i.quantity, serialNumber:i.serial_number || undefined,
+    lotNumber:i.lot_number || undefined, expirationDate:i.expiration_date || undefined, anvisaRegister:i.anvisa_register || undefined })),
+  commentsCount: 0, attachmentsCount: 0
+});
+
 export const apiService = {
   // --- TICKETS ---
   async getTickets(filters?: DashboardFilters): Promise<Ticket[]> {
     if (isSupabaseConfigured) {
-      let query = supabase.from('tickets').select('*, items:ticket_items(*)');
+      let query = supabase.from('tickets').select('*, customer:customers(name,document), items:ticket_items(*)');
       if (filters?.tenantId) query = query.eq('tenant_id', filters.tenantId);
       if (filters?.unitId) query = query.eq('unit_id', filters.unitId);
       if (filters?.status) query = query.eq('status', filters.status);
@@ -31,7 +74,7 @@ export const apiService = {
         console.error('Supabase fetch tickets error:', error);
         return localTickets;
       }
-      return data as unknown as Ticket[];
+      return (data || []).map(ticketFromDb);
     }
 
     let filtered = [...localTickets];
@@ -224,7 +267,17 @@ export const apiService = {
   },
 
   // --- USER MANAGEMENT ---
+  async getCurrentProfile(userId: string): Promise<UserProfile | null> {
+    if (!isSupabaseConfigured) return localUsers.find(u => u.id === userId) || null;
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    return error || !data ? null : profileFromDb(data);
+  },
+
   async getUsers(): Promise<UserProfile[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('profiles').select('*').order('full_name');
+      if (!error && data) return data.map(profileFromDb);
+    }
     return localUsers;
   },
 
@@ -238,6 +291,17 @@ export const apiService = {
   },
 
   async updateUser(userId: string, updateData: Partial<UserProfile>): Promise<UserProfile | null> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('profiles').update({
+        full_name: updateData.fullName, email: updateData.email, phone: updateData.phone || null,
+        job_title: updateData.jobTitle || null, department: updateData.department || null,
+        employee_code: updateData.employeeCode || null, manager_name: updateData.managerName || null,
+        notes: updateData.notes || null, role_code: updateData.roleCode, is_active: updateData.isActive,
+        updated_at: new Date().toISOString()
+      }).eq('id', userId).select().single();
+      if (error) throw new Error(`Não foi possível salvar o usuário: ${error.message}`);
+      return profileFromDb(data);
+    }
     const idx = localUsers.findIndex(u => u.id === userId);
     if (idx === -1) return null;
     localUsers[idx] = { ...localUsers[idx], ...updateData };
@@ -246,6 +310,11 @@ export const apiService = {
 
   // --- RESET SYSTEM DATA ("ZERAR AS INFORMAÇÕES") ---
   async resetAllData(): Promise<boolean> {
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.rpc('reset_operational_sac_data');
+      if (error) throw new Error(`Não foi possível zerar os registros: ${error.message}`);
+      return true;
+    }
     localTickets = [];
     localQualityPlans = [];
     localTechnicalCases = [];
@@ -263,6 +332,31 @@ export const apiService = {
     });
 
     return true;
+  },
+
+  async importHistoricalTickets(tickets: HistoricalImportTicket[], user: UserProfile): Promise<{ imported: number; skipped: number }> {
+    if (!tickets.length) return { imported: 0, skipped: 0 };
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.rpc('import_historical_sac', { p_tickets: tickets });
+      if (error) throw new Error(`Importação recusada pelo banco: ${error.message}`);
+      return data as { imported: number; skipped: number };
+    }
+    const before = localTickets.length;
+    for (const imported of tickets) {
+      if (localTickets.some(t => t.protocol === imported.protocol)) continue;
+      localTickets.push({
+        id: `import-${Date.now()}-${localTickets.length}`, tenantId: user.tenantId, protocol: imported.protocol,
+        customerId: imported.customerDocument || imported.customerName, customerName: imported.customerName,
+        customerDocument: imported.customerDocument || '', description: imported.description, category: imported.category,
+        priority: (['LOW','MEDIUM','HIGH','CRITICAL'].includes(imported.priority) ? imported.priority : 'MEDIUM') as any,
+        urgency: 'MEDIUM', impact: 'MEDIUM', initialProcedency: 'UNDETERMINED', userRiskFlag: false,
+        adverseEventFlag: false, damageFlag: false, readyForCollection: false, status: imported.status as TicketStatus,
+        invoiceNumber: imported.invoiceNumber, createdBy: user.id, createdAt: imported.openedAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(), createdByName: user.fullName, items: imported.items.map((i,n) => ({ ...i, id:`item-${Date.now()}-${n}`, ticketId:'', quantity:i.quantity })),
+        commentsCount: 0, attachmentsCount: 0
+      });
+    }
+    return { imported: localTickets.length - before, skipped: tickets.length - (localTickets.length - before) };
   },
 
   // --- CUSTOMERS & PRODUCTS ---
@@ -379,3 +473,4 @@ export const apiService = {
     return `Prezado(a) ${ticket.customerName},\n\nAgradecemos o contato com o SAC da Procirúrgica. Registramos a sua solicitação sob o protocolo ${ticket.protocol}.\n\nNossa equipe técnica e farmacêutica responsável iniciou a análise da ocorrência relacionada ao item ${ticket.items[0]?.productName || ''}. Entraremos em contato com a solução e procedimentos para agendamento de coleta/visita em até 24 horas úteis.\n\nAtenciosamente,\nEquipe de Pós-Venda & Qualidade - Procirúrgica`;
   }
 };
+
