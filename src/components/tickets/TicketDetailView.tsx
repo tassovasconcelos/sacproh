@@ -53,12 +53,14 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
 
   // New Comment Input
-  const [commentsList, setCommentsList] = useState([
-    { id: 'c1', author: 'Mariana Vasconcelos', content: 'Abertura do chamado realizada e encaminhada à análise da farmacêutica.', date: '28/07/2026 09:35', internal: false },
-    { id: 'c2', author: 'Dra. Patricia Lima', content: 'Sinalizado possível risco de instabilidade cirúrgica. Solicitada priorização da assistência técnica.', date: '28/07/2026 10:20', internal: true }
-  ]);
+  const [commentsList, setCommentsList] = useState<Array<{id:string;author:string;content:string;date:string;internal:boolean}>>([]);
   const [newCommentText, setNewCommentText] = useState('');
   const [isInternalComment, setIsInternalComment] = useState(false);
+  const [commentError, setCommentError] = useState('');
+
+  useEffect(() => {
+    apiService.getTicketComments(ticket.id).then(setCommentsList).catch(error => setCommentError(error.message));
+  }, [ticket.id]);
 
   const tabs: { id: typeof activeTab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview', label: 'Visão Geral', icon: <FileText className="w-3.5 h-3.5" /> },
@@ -76,20 +78,17 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
     { id: 'audit', label: 'Auditoria', icon: <History className="w-3.5 h-3.5" /> }
   ];
 
-  const handleAddComment = (e: React.FormEvent) => {
+  const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentText.trim()) return;
-    setCommentsList([
-      ...commentsList,
-      {
-        id: 'c-' + Date.now(),
-        author: 'Usuário Conectado',
-        content: newCommentText,
-        date: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        internal: isInternalComment
-      }
-    ]);
-    setNewCommentText('');
+    try {
+      setCommentError('');
+      const saved = await apiService.createTicketComment(ticket, newCommentText, isInternalComment, currentUser);
+      setCommentsList(previous => [...previous, saved]);
+      setNewCommentText('');
+    } catch (error) {
+      setCommentError(error instanceof Error ? error.message : 'Não foi possível salvar o comentário.');
+    }
   };
 
   const handleGenerateAiSummary = async () => {
@@ -338,6 +337,7 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
           {/* TAB 5: COMENTÁRIOS */}
           {activeTab === 'comments' && (
             <div className="space-y-4">
+              {commentError && <p className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700">{commentError}</p>}
               <div className="space-y-3">
                 {commentsList.map(c => (
                   <div 
