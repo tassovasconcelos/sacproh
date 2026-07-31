@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, Clock, AlertTriangle, ShieldCheck, CheckCircle2, MessageSquare, 
-  Paperclip, Wrench, Truck, Sparkles, DollarSign, Award, History, FileText, Send, Building, User, Package, Plus 
+  Paperclip, Wrench, Truck, Sparkles, DollarSign, Award, History, FileText, Send, Building, User, Package, Plus, Edit3, Trash2, X
 } from 'lucide-react';
 import { Ticket, TicketStatus, UserRole, UserProfile, ServiceOrder, TicketQualificationStage } from '../../types';
 import { apiService } from '../../services/apiService';
@@ -17,6 +18,8 @@ interface TicketDetailViewProps {
   onUpdateStatus: (ticketId: string, newStatus: TicketStatus, notes: string) => void;
   onDispatch: (ticketId: string, assignedArea: string, assignedToId?: string, assignedToName?: string, notes?: string) => void;
   onCreateOS: (osData: Omit<ServiceOrder, 'id' | 'osNumber' | 'openedAt'>) => void;
+  onUpdateTicket: (ticket: Ticket, changes: Partial<Ticket>) => Promise<void>;
+  onDeleteTicket: (ticket: Ticket, reason: string) => Promise<void>;
 }
 
 export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
@@ -27,7 +30,9 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
   onBack,
   onUpdateStatus,
   onDispatch,
-  onCreateOS
+  onCreateOS,
+  onUpdateTicket,
+  onDeleteTicket
 }) => {
   const [activeTab, setActiveTab] = useState<
     'overview' | 'customer' | 'products' | 'history' | 'comments' | 'attachments' | 'technical' | 'logistics' | 'quality' | 'costs' | 'sla' | 'survey' | 'audit'
@@ -35,6 +40,15 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
 
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [showOSModal, setShowOSModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [editDescription, setEditDescription] = useState(ticket.description);
+  const [editCategory, setEditCategory] = useState(ticket.category);
+  const [editPriority, setEditPriority] = useState(ticket.priority);
+  const [editInvoice, setEditInvoice] = useState(ticket.invoiceNumber || '');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [operationError, setOperationError] = useState('');
+  const [isSavingOperation, setIsSavingOperation] = useState(false);
   const [qualificationStage, setQualificationStage] = useState<TicketQualificationStage>(ticket.qualificationStage || 'REGISTRATION');
   const [qualificationNotes, setQualificationNotes] = useState(ticket.qualificationNotes || '');
   const [qualificationMessage, setQualificationMessage] = useState('');
@@ -133,6 +147,8 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
 
           {/* Quick Status & Actions */}
           <div className="flex flex-wrap items-center gap-2">
+            <button onClick={()=>setShowEditModal(true)} className="bg-slate-100 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1"><Edit3 className="w-3.5 h-3.5"/>Editar SAC</button>
+            {['SUPERADMIN','ADMIN_EMPRESA','DIRETORIA'].includes(userRole) && <button onClick={()=>setShowDeleteModal(true)} className="bg-red-50 text-red-700 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1"><Trash2 className="w-3.5 h-3.5"/>Excluir</button>}
             <button
               onClick={() => setShowDispatchModal(true)}
               className="bg-[#145EDB] hover:bg-[#0f4bb3] text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1 shadow"
@@ -441,6 +457,10 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
           onCreateOS={onCreateOS}
         />
       )}
+
+      {showEditModal && <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4"><form onSubmit={async e=>{e.preventDefault();setIsSavingOperation(true);setOperationError('');try{await onUpdateTicket(ticket,{description:editDescription,category:editCategory,priority:editPriority,invoiceNumber:editInvoice});setShowEditModal(false);}catch(error){setOperationError(error instanceof Error?error.message:'Falha ao editar SAC');}finally{setIsSavingOperation(false);}}} className="bg-white w-full max-w-xl rounded-2xl p-6 space-y-4 text-xs"><div className="flex justify-between"><h3 className="font-bold text-base">Editar {ticket.protocol}</h3><button type="button" onClick={()=>setShowEditModal(false)}><X className="w-5 h-5"/></button></div>{operationError&&<p className="bg-red-50 text-red-700 p-2 rounded">{operationError}</p>}<label className="block font-bold">Descrição<textarea required rows={5} value={editDescription} onChange={e=>setEditDescription(e.target.value)} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label><div className="grid md:grid-cols-3 gap-3"><label className="font-bold">Categoria<input required value={editCategory} onChange={e=>setEditCategory(e.target.value)} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label><label className="font-bold">Prioridade<select value={editPriority} onChange={e=>setEditPriority(e.target.value as Ticket['priority'])} className="mt-1 w-full border rounded-lg p-2 font-normal"><option value="LOW">Baixa</option><option value="MEDIUM">Média</option><option value="HIGH">Alta</option><option value="CRITICAL">Crítica</option></select></label><label className="font-bold">Nota fiscal<input value={editInvoice} onChange={e=>setEditInvoice(e.target.value)} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label></div><div className="flex justify-end gap-2"><button type="button" onClick={()=>setShowEditModal(false)} className="px-4 py-2 bg-slate-200 rounded-lg font-bold">Cancelar</button><button disabled={isSavingOperation} className="px-4 py-2 bg-[#145EDB] text-white rounded-lg font-bold">{isSavingOperation?'Salvando...':'Salvar alterações'}</button></div></form></div>}
+
+      {showDeleteModal && <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4"><form onSubmit={async e=>{e.preventDefault();setIsSavingOperation(true);setOperationError('');try{await onDeleteTicket(ticket,deleteReason);setShowDeleteModal(false);}catch(error){setOperationError(error instanceof Error?error.message:'Falha ao excluir SAC');}finally{setIsSavingOperation(false);}}} className="bg-white w-full max-w-md rounded-2xl p-6 space-y-4 text-xs"><h3 className="font-bold text-base text-red-700">Excluir {ticket.protocol}</h3><p>A exclusão remove também itens, comentários e OS vinculadas. O número do protocolo nunca será reutilizado.</p>{operationError&&<p className="bg-red-50 text-red-700 p-2 rounded">{operationError}</p>}<label className="block font-bold">Motivo obrigatório<textarea required value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label><div className="flex justify-end gap-2"><button type="button" onClick={()=>setShowDeleteModal(false)} className="px-4 py-2 bg-slate-200 rounded-lg font-bold">Cancelar</button><button disabled={isSavingOperation} className="px-4 py-2 bg-red-600 text-white rounded-lg font-bold">{isSavingOperation?'Excluindo...':'Confirmar exclusão'}</button></div></form></div>}
     </div>
   );
 };
