@@ -39,9 +39,25 @@ const profileFromDb = (row: any): UserProfile => ({
   isActive: row.is_active, lastAccessAt: row.last_access_at || undefined
 });
 
+const customerFromDb = (row: any): Customer => ({
+  id: row.id, tenantId: row.tenant_id, type: row.type, name: row.name,
+  tradeName: row.trade_name || undefined, document: row.document,
+  email: row.email || undefined, phone: row.phone || undefined,
+  whatsapp: row.whatsapp || undefined, city: row.city || undefined,
+  state: row.state || undefined, address: row.address || undefined,
+  lgpdConsent: Boolean(row.lgpd_consent)
+});
+
+const productFromDb = (row: any): Product => ({
+  id: row.id, tenantId: row.tenant_id, codeSku: row.code_sku, name: row.name,
+  familyId: row.family_id || undefined, model: row.model || undefined,
+  anvisaRegister: row.anvisa_register || undefined,
+  supplierName: row.supplier_name || undefined, countryOrigin: row.country_origin || undefined
+});
+
 const ticketFromDb = (row: any): Ticket => ({
   id: row.id, tenantId: row.tenant_id, protocol: row.protocol, unitId: row.unit_id || undefined,
-  customerId: row.customer_id || '', customerName: row.customer?.name || row.customer_name || 'Cliente não identificado',
+  customerId: row.customer_id || '', customerName: row.customer?.name || row.customer_name || 'Cliente nÃ£o identificado',
   customerDocument: row.customer?.document || row.customer_document || '', sellerName: row.seller_name || undefined,
   invoiceNumber: row.invoice_number || undefined, purchaseDate: row.purchase_date || undefined,
   deliveryDate: row.delivery_date || undefined, salesChannel: row.sales_channel || undefined,
@@ -53,7 +69,7 @@ const ticketFromDb = (row: any): Ticket => ({
   slaDueAt: row.sla_due_at || undefined, firstResponseAt: row.first_response_at || undefined,
   resolvedAt: row.resolved_at || undefined, closedAt: row.closed_at || undefined,
   finalOpinion: row.final_opinion || undefined, finalProcedency: row.final_procedency || undefined,
-  createdBy: row.created_by, createdByName: row.created_by_name || 'Usuário do SAC', createdAt: row.created_at, updatedAt: row.updated_at,
+  createdBy: row.created_by, createdByName: row.created_by_name || 'UsuÃ¡rio do SAC', createdAt: row.created_at, updatedAt: row.updated_at,
   items: (row.items || []).map((i:any) => ({ id:i.id, ticketId:i.ticket_id, productId:i.product_id || undefined,
     productName:i.product_name, sku:i.sku || undefined, quantity:i.quantity, serialNumber:i.serial_number || undefined,
     lotNumber:i.lot_number || undefined, expirationDate:i.expiration_date || undefined, anvisaRegister:i.anvisa_register || undefined })),
@@ -99,9 +115,8 @@ export const apiService = {
   },
 
   async createTicket(ticketData: Omit<Ticket, 'id' | 'protocol' | 'createdAt' | 'updatedAt'>): Promise<Ticket> {
-    const ym = new Date().toISOString().slice(2, 4) + (new Date().getMonth() + 1).toString().padStart(2, '0');
-    const seq = (localTickets.length + 1).toString().padStart(3, '0');
-    const protocol = `SAC.${ym}.${seq}`;
+    const ym = new Date().toISOString().slice(2, 7).replace('-', '');
+    let protocol = `SAC.${ym}.${Date.now().toString().slice(-6)}`;
     
     const newTicket: Ticket = {
       ...ticketData,
@@ -115,26 +130,58 @@ export const apiService = {
 
     if (isSupabaseConfigured) {
       try {
+        const { data: generatedProtocol } = await supabase.rpc('generate_ticket_protocol', { p_tenant_id: ticketData.tenantId });
+        if (generatedProtocol) protocol = generatedProtocol;
         const { data, error } = await supabase.from('tickets').insert([{
           tenant_id: ticketData.tenantId,
           protocol,
           unit_id: ticketData.unitId,
           customer_id: ticketData.customerId,
+          seller_name: ticketData.sellerName || null,
+          invoice_number: ticketData.invoiceNumber || null,
+          purchase_date: ticketData.purchaseDate || null,
+          delivery_date: ticketData.deliveryDate || null,
+          sales_channel: ticketData.salesChannel || null,
           description: ticketData.description,
           category: ticketData.category,
           subcategory: ticketData.subcategory,
           priority: ticketData.priority,
           urgency: ticketData.urgency,
           impact: ticketData.impact,
+          initial_procedency: ticketData.initialProcedency,
           status: ticketData.status,
+          assigned_area: ticketData.assignedArea || null,
+          created_by: ticketData.createdBy,
           user_risk_flag: ticketData.userRiskFlag,
           adverse_event_flag: ticketData.adverseEventFlag,
           damage_flag: ticketData.damageFlag,
           ready_for_collection: ticketData.readyForCollection
-        }]).select().single();
-        if (!error && data) return data as unknown as Ticket;
+        }]).select('*, customer:customers(name,document), items:ticket_items(*)').single();
+        if (error || !data) throw error || new Error('Chamado nÃ£o retornado pelo banco');
+
+        if (ticketData.items.length) {
+          const { error: itemError } = await supabase.from('ticket_items').insert(ticketData.items.map(item => ({
+            ticket_id: data.id,
+            product_id: item.productId || null,
+            product_name: item.productName,
+            sku: item.sku || null,
+            quantity: item.quantity,
+            serial_number: item.serialNumber || null,
+            lot_number: item.lotNumber || null,
+            expiration_date: item.expirationDate || null,
+            anvisa_register: item.anvisaRegister || null
+          })));
+          if (itemError) throw itemError;
+        }
+
+        const { data: complete } = await supabase
+          .from('tickets')
+          .select('*, customer:customers(name,document), items:ticket_items(*)')
+          .eq('id', data.id).single();
+        return ticketFromDb(complete || data);
       } catch (err) {
         console.error('Failed creating ticket in Supabase:', err);
+        throw err;
       }
     }
 
@@ -198,9 +245,9 @@ export const apiService = {
     ticket.updatedAt = new Date().toISOString();
 
     // Auto update status if routing to Technical or Logistics
-    if (assignedArea.toLowerCase().includes('técnica') || assignedArea.toLowerCase().includes('tecnica')) {
+    if (assignedArea.toLowerCase().includes('tÃ©cnica') || assignedArea.toLowerCase().includes('tecnica')) {
       ticket.status = 'SENT_TO_TECHNICAL';
-    } else if (assignedArea.toLowerCase().includes('logística') || assignedArea.toLowerCase().includes('logistica')) {
+    } else if (assignedArea.toLowerCase().includes('logÃ­stica') || assignedArea.toLowerCase().includes('logistica')) {
       ticket.status = 'SENT_TO_LOGISTICS';
     }
 
@@ -211,14 +258,14 @@ export const apiService = {
       action: 'TICKET_DISPATCHED',
       entity: 'TICKET',
       entityId: ticketId,
-      details: `Chamado ${ticket.protocol} direcionado para área: ${assignedArea}, Responsável: ${assignedToName || 'Não especificado'}. Obs: ${notes || 'Sem observações'}`,
+      details: `Chamado ${ticket.protocol} direcionado para Ã¡rea: ${assignedArea}, ResponsÃ¡vel: ${assignedToName || 'NÃ£o especificado'}. Obs: ${notes || 'Sem observaÃ§Ãµes'}`,
       createdAt: new Date().toISOString()
     });
 
     return ticket;
   },
 
-  // --- SERVICE ORDERS (ORDENS DE SERVIÇO - OS) ---
+  // --- SERVICE ORDERS (ORDENS DE SERVIÃ‡O - OS) ---
   async getServiceOrders(): Promise<ServiceOrder[]> {
     return localServiceOrders;
   },
@@ -259,7 +306,7 @@ export const apiService = {
       action: 'OS_CREATED',
       entity: 'SERVICE_ORDER',
       entityId: newOS.id,
-      details: `Abertura da Ordem de Serviço ${osNumber} para o equipamento ${osData.equipmentName} do cliente ${osData.customerName}`,
+      details: `Abertura da Ordem de ServiÃ§o ${osNumber} para o equipamento ${osData.equipmentName} do cliente ${osData.customerName}`,
       createdAt: new Date().toISOString()
     });
 
@@ -299,7 +346,7 @@ export const apiService = {
         notes: updateData.notes || null, role_code: updateData.roleCode, is_active: updateData.isActive,
         updated_at: new Date().toISOString()
       }).eq('id', userId).select().single();
-      if (error) throw new Error(`Não foi possível salvar o usuário: ${error.message}`);
+      if (error) throw new Error(`NÃ£o foi possÃ­vel salvar o usuÃ¡rio: ${error.message}`);
       return profileFromDb(data);
     }
     const idx = localUsers.findIndex(u => u.id === userId);
@@ -308,11 +355,11 @@ export const apiService = {
     return localUsers[idx];
   },
 
-  // --- RESET SYSTEM DATA ("ZERAR AS INFORMAÇÕES") ---
+  // --- RESET SYSTEM DATA ("ZERAR AS INFORMAÃ‡Ã•ES") ---
   async resetAllData(): Promise<boolean> {
     if (isSupabaseConfigured) {
       const { error } = await supabase.rpc('reset_operational_sac_data');
-      if (error) throw new Error(`Não foi possível zerar os registros: ${error.message}`);
+      if (error) throw new Error(`NÃ£o foi possÃ­vel zerar os registros: ${error.message}`);
       return true;
     }
     localTickets = [];
@@ -327,7 +374,7 @@ export const apiService = {
       userEmail: 'admin@procirurgica.com.br',
       action: 'DATA_RESET',
       entity: 'SYSTEM',
-      details: 'Todas as informações de chamados, ordens de serviço, planos 5W2H e históricos foram zeradas via painel administrativo.',
+      details: 'Todas as informaÃ§Ãµes de chamados, ordens de serviÃ§o, planos 5W2H e histÃ³ricos foram zeradas via painel administrativo.',
       createdAt: new Date().toISOString()
     });
 
@@ -338,7 +385,7 @@ export const apiService = {
     if (!tickets.length) return { imported: 0, skipped: 0 };
     if (isSupabaseConfigured) {
       const { data, error } = await supabase.rpc('import_historical_sac', { p_tickets: tickets });
-      if (error) throw new Error(`Importação recusada pelo banco: ${error.message}`);
+      if (error) throw new Error(`ImportaÃ§Ã£o recusada pelo banco: ${error.message}`);
       return data as { imported: number; skipped: number };
     }
     const before = localTickets.length;
@@ -361,10 +408,37 @@ export const apiService = {
 
   // --- CUSTOMERS & PRODUCTS ---
   async getCustomers(): Promise<Customer[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('customers').select('*').order('name');
+      if (!error) return (data || []).map(customerFromDb);
+    }
     return localCustomers;
   },
 
+  async createCustomer(customer: Omit<Customer, 'id'>): Promise<Customer> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('customers').insert({
+        tenant_id: customer.tenantId, type: customer.type, name: customer.name,
+        trade_name: customer.tradeName || null, document: customer.document,
+        email: customer.email || null, phone: customer.phone || null,
+        whatsapp: customer.whatsapp || null, city: customer.city || null,
+        state: customer.state || null, address: customer.address || null,
+        lgpd_consent: customer.lgpdConsent,
+        lgpd_consent_at: customer.lgpdConsent ? new Date().toISOString() : null
+      }).select().single();
+      if (error || !data) throw error || new Error('Cliente nÃ£o retornado pelo banco');
+      return customerFromDb(data);
+    }
+    const created = { ...customer, id: `c-${Date.now()}` };
+    localCustomers.push(created);
+    return created;
+  },
+
   async getProducts(): Promise<Product[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('products').select('*').order('name');
+      if (!error) return (data || []).map(productFromDb);
+    }
     return localProducts;
   },
 
@@ -414,24 +488,24 @@ export const apiService = {
     // Heuristic Fallback if Gemini key is not configured or server unreachable
     return {
       suggested_category: description.toLowerCase().includes('erro') || description.toLowerCase().includes('defeito') 
-        ? 'Assistência Técnica' 
-        : 'Logística / Avaria',
+        ? 'AssistÃªncia TÃ©cnica' 
+        : 'LogÃ­stica / Avaria',
       suggested_subcategory: description.toLowerCase().includes('erro') 
-        ? 'Falha Eletrônica / Componente' 
+        ? 'Falha EletrÃ´nica / Componente' 
         : 'Avaria em Transporte',
-      suggested_priority: description.toLowerCase().includes('cirúrgico') || description.toLowerCase().includes('paciente') 
+      suggested_priority: description.toLowerCase().includes('cirÃºrgico') || description.toLowerCase().includes('paciente') 
         ? 'CRITICAL' 
         : 'HIGH',
       suggested_severity: 'S2 - Moderada/Severa',
       summary: description.slice(0, 180) + '...',
       possible_root_causes: [
-        'Desgaste natural de componente elétrico',
-        'Incompatibilidade ou oscilação de tensão na rede hospitalar',
-        'Compressão mecânica na embalagem secundária'
+        'Desgaste natural de componente elÃ©trico',
+        'Incompatibilidade ou oscilaÃ§Ã£o de tensÃ£o na rede hospitalar',
+        'CompressÃ£o mecÃ¢nica na embalagem secundÃ¡ria'
       ],
       missing_information: [
-        'Número do Lote do Fabricante',
-        'Horário do evento cirúrgico'
+        'NÃºmero do Lote do Fabricante',
+        'HorÃ¡rio do evento cirÃºrgico'
       ],
       confidence: 88
     };
@@ -452,7 +526,7 @@ export const apiService = {
       console.warn('AI Summary endpoint fallback:', err);
     }
 
-    return `Resumo Executivo Protocolo ${ticket.protocol}: O cliente ${ticket.customerName} reportou ocorrência na categoria ${ticket.category} envolvendo o produto ${ticket.items[0]?.productName || 'não especificado'}. Status atual: ${ticket.status}. Classificado como prioridade ${ticket.priority} devido ao impacto na operação do cliente.`;
+    return `Resumo Executivo Protocolo ${ticket.protocol}: O cliente ${ticket.customerName} reportou ocorrÃªncia na categoria ${ticket.category} envolvendo o produto ${ticket.items[0]?.productName || 'nÃ£o especificado'}. Status atual: ${ticket.status}. Classificado como prioridade ${ticket.priority} devido ao impacto na operaÃ§Ã£o do cliente.`;
   },
 
   async suggestResponseWithGemini(ticket: Ticket): Promise<string> {
@@ -470,7 +544,7 @@ export const apiService = {
       console.warn('AI Response Suggestion fallback:', err);
     }
 
-    return `Prezado(a) ${ticket.customerName},\n\nAgradecemos o contato com o SAC da Procirúrgica. Registramos a sua solicitação sob o protocolo ${ticket.protocol}.\n\nNossa equipe técnica e farmacêutica responsável iniciou a análise da ocorrência relacionada ao item ${ticket.items[0]?.productName || ''}. Entraremos em contato com a solução e procedimentos para agendamento de coleta/visita em até 24 horas úteis.\n\nAtenciosamente,\nEquipe de Pós-Venda & Qualidade - Procirúrgica`;
+    return `Prezado(a) ${ticket.customerName},\n\nAgradecemos o contato com o SAC da ProcirÃºrgica. Registramos a sua solicitaÃ§Ã£o sob o protocolo ${ticket.protocol}.\n\nNossa equipe tÃ©cnica e farmacÃªutica responsÃ¡vel iniciou a anÃ¡lise da ocorrÃªncia relacionada ao item ${ticket.items[0]?.productName || ''}. Entraremos em contato com a soluÃ§Ã£o e procedimentos para agendamento de coleta/visita em atÃ© 24 horas Ãºteis.\n\nAtenciosamente,\nEquipe de PÃ³s-Venda & Qualidade - ProcirÃºrgica`;
   }
 };
 
