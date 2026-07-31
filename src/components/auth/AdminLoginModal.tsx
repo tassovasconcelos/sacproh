@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, Key, Lock, Mail, ShieldAlert, X } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 
@@ -12,12 +12,76 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mode, setMode] = useState<'login' | 'request-reset' | 'update-password'>('login');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [recoveryActive, setRecoveryActive] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecoveryActive(true);
+        setMode('update-password');
+        setErrorMsg('');
+        setSuccessMsg('Link validado. Defina sua nova senha.');
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  if (!isOpen && !recoveryActive) return null;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (mode === 'request-reset') {
+      if (!email) {
+        setErrorMsg('Informe o e-mail cadastrado.');
+        return;
+      }
+      setIsSubmitting(true);
+      setErrorMsg('');
+      setSuccessMsg('');
+      const redirectTo = `${window.location.origin}${window.location.pathname}`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      setIsSubmitting(false);
+      if (error) {
+        const isRateLimited = error.message.toLowerCase().includes('rate limit');
+        setErrorMsg(isRateLimited
+          ? 'Muitas solicitações foram feitas. Aguarde alguns minutos e tente novamente.'
+          : `Não foi possível enviar a recuperação: ${error.message}`);
+        return;
+      }
+      setSuccessMsg('Enviamos um novo link de recuperação para seu e-mail.');
+      return;
+    }
+
+    if (mode === 'update-password') {
+      if (password.length < 8) {
+        setErrorMsg('A nova senha deve ter pelo menos 8 caracteres.');
+        return;
+      }
+      if (password !== passwordConfirmation) {
+        setErrorMsg('As senhas informadas não são iguais.');
+        return;
+      }
+      setIsSubmitting(true);
+      setErrorMsg('');
+      const { error } = await supabase.auth.updateUser({ password });
+      setIsSubmitting(false);
+      if (error) {
+        setErrorMsg('Não foi possível atualizar a senha. Solicite um novo link.');
+        return;
+      }
+      setSuccessMsg('Senha atualizada. Você já pode entrar na Área ADM.');
+      setPassword('');
+      setPasswordConfirmation('');
+      setMode('login');
+      setRecoveryActive(false);
+      await supabase.auth.signOut();
+      return;
+    }
+
     if (!email || !password) {
       setErrorMsg('Preencha o e-mail e a senha de administrador.');
       return;
@@ -67,7 +131,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
               <p className="text-[11px] text-slate-400">Autenticação segura pelo Supabase</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar">
+          <button onClick={() => { setRecoveryActive(false); onClose(); }} className="p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -81,30 +145,51 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
               <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" /><span>{errorMsg}</span>
             </div>
           )}
-          <label className="block font-bold text-slate-300">
+          {successMsg && (
+            <div className="p-3 bg-emerald-950/80 border border-emerald-700 text-emerald-200 rounded-xl">
+              {successMsg}
+            </div>
+          )}
+          {mode !== 'update-password' && <label className="block font-bold text-slate-300">
             E-mail de administrador
             <span className="relative block mt-1">
               <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
                 className="w-full bg-slate-900 border border-slate-700 pl-9 pr-3 py-2.5 rounded-xl text-white outline-none focus:border-[#145EDB]" />
             </span>
-          </label>
-          <label className="block font-bold text-slate-300">
-            Senha
+          </label>}
+          {mode !== 'request-reset' && <label className="block font-bold text-slate-300">
+            {mode === 'update-password' ? 'Nova senha' : 'Senha'}
             <span className="relative block mt-1">
               <Key className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
                 className="w-full bg-slate-900 border border-slate-700 pl-9 pr-3 py-2.5 rounded-xl text-white outline-none focus:border-[#145EDB]" />
             </span>
-          </label>
+          </label>}
+          {mode === 'update-password' && (
+            <label className="block font-bold text-slate-300">
+              Confirmar nova senha
+              <span className="relative block mt-1">
+                <Key className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                <input type="password" value={passwordConfirmation} onChange={e => setPasswordConfirmation(e.target.value)} required
+                  className="w-full bg-slate-900 border border-slate-700 pl-9 pr-3 py-2.5 rounded-xl text-white outline-none focus:border-[#E51B2B]" />
+              </span>
+            </label>
+          )}
+          {mode === 'login' && (
+            <button type="button" onClick={() => { setMode('request-reset'); setErrorMsg(''); setSuccessMsg(''); }}
+              className="text-[#E51B2B] font-bold hover:underline">
+              Esqueci minha senha
+            </button>
+          )}
           <div className="p-3 bg-slate-900/70 rounded-xl border border-slate-800 text-[11px] text-slate-400">
             O acesso é validado pelo Supabase. Nunca compartilhe sua senha.
           </div>
           <div className="pt-2 flex items-center justify-end space-x-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl">Cancelar</button>
+            <button type="button" onClick={() => mode === 'login' ? onClose() : setMode('login')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl">{mode === 'login' ? 'Cancelar' : 'Voltar'}</button>
             <button type="submit" disabled={isSubmitting}
               className="px-5 py-2.5 bg-[#145EDB] hover:bg-[#0f4bb3] disabled:opacity-60 text-white font-extrabold rounded-xl shadow-lg flex items-center space-x-2">
-              <span>{isSubmitting ? 'Validando...' : 'Entrar na Área ADM'}</span><ArrowRight className="w-4 h-4" />
+              <span>{isSubmitting ? 'Processando...' : mode === 'request-reset' ? 'Enviar recuperação' : mode === 'update-password' ? 'Salvar nova senha' : 'Entrar na Área ADM'}</span><ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </form>
