@@ -15,7 +15,7 @@ import { GritNewsPortal } from './components/grit/GritNewsPortal';
 import { AdminLoginModal } from './components/auth/AdminLoginModal';
 
 import { 
-  Tenant, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder
+  Tenant, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder, Carrier
 } from './types';
 import { mockTenants, mockCustomers, mockProducts } from './lib/mockData';
 import { apiService } from './services/apiService';
@@ -78,6 +78,7 @@ export default function App() {
 
   const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
   const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [qualityPlans, setQualityPlans] = useState<QualityActionPlan[]>([]);
   const [technicalCases, setTechnicalCases] = useState<TechnicalCase[]>([]);
   const [logisticsCases, setLogisticsCases] = useState<LogisticsCase[]>([]);
@@ -97,6 +98,9 @@ export default function App() {
 
     const fetchedProducts = await apiService.getProducts();
     setProducts(fetchedProducts);
+
+    const fetchedCarriers = await apiService.getCarriers();
+    setCarriers(fetchedCarriers);
 
     const qPlans = await apiService.getQualityPlans();
     setQualityPlans(qPlans);
@@ -295,6 +299,7 @@ export default function App() {
           {selectedTicket ? (
             <TicketDetailView
               ticket={selectedTicket}
+              currentUser={currentUser}
               userRole={currentUser.roleCode}
               users={users}
               onBack={() => setSelectedTicket(null)}
@@ -375,20 +380,20 @@ export default function App() {
 
               {currentView === 'audit' && (
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h1 className="text-xl font-bold text-[#10233F]">Trilha de Auditoria ImutÃ¡vel (Audit Logs)</h1>
-                  <p className="text-xs text-slate-500">Registro histÃ³rico de todas as alteraÃ§Ãµes, aberturas, transiÃ§Ãµes de status e acessos no tenant ProcirÃºrgica</p>
+                  <h1 className="text-xl font-bold text-[#10233F]">Trilha de Auditoria Imutável (Audit Logs)</h1>
+                  <p className="text-xs text-slate-500">Registro histórico de todas as alterações, aberturas, transições de status e acessos no tenant Procirúrgica</p>
                   <div className="divide-y divide-slate-100 text-xs pt-2">
                     <div className="py-2.5 flex justify-between">
                       <div>
                         <strong className="text-[#145EDB]">STATUS_CHANGED</strong> - Protocolo SAC.2607.001
-                        <p className="text-slate-500">Status alterado de EM TRIAGEM para EM ANÃLISE TÃ‰CNICA por Dra. Patricia Lima</p>
+                        <p className="text-slate-500">Status alterado de EM TRIAGEM para EM ANÁLISE TÉCNICA por Dra. Patricia Lima</p>
                       </div>
                       <span className="text-slate-400">28/07/2026 10:15</span>
                     </div>
                     <div className="py-2.5 flex justify-between">
                       <div>
                         <strong className="text-emerald-600">TICKET_CREATED</strong> - Protocolo SAC.2607.001
-                        <p className="text-slate-500">Abertura de protocolo para Hospital SÃ£o Mateus Ltda por Mariana Vasconcelos</p>
+                        <p className="text-slate-500">Abertura de protocolo para Hospital São Mateus Ltda por Mariana Vasconcelos</p>
                       </div>
                       <span className="text-slate-400">28/07/2026 09:30</span>
                     </div>
@@ -407,6 +412,7 @@ export default function App() {
           products={products}
           currentTenantId={currentTenant.id}
           currentUser={currentUser}
+          carriers={carriers}
           onClose={() => setIsNewTicketModalOpen(false)}
           onTicketCreated={handleTicketCreated}
         />
