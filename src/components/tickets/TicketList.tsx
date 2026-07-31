@@ -19,12 +19,32 @@ export const TicketList: React.FC<TicketListProps> = ({
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const filteredTickets = tickets.filter(t => {
     if (statusFilter !== 'ALL' && t.status !== statusFilter) return false;
     if (priorityFilter !== 'ALL' && t.priority !== priorityFilter) return false;
+    const search = searchTerm.trim().toLocaleLowerCase('pt-BR');
+    if (search && ![
+      t.protocol, t.customerName, t.customerDocument, t.category, t.description,
+      t.invoiceNumber, t.assignedToName, t.assignedArea,
+      ...t.items.flatMap(item => [item.productName, item.sku, item.lotNumber, item.serialNumber])
+    ].some(value => value?.toLocaleLowerCase('pt-BR').includes(search))) return false;
     return true;
   });
+
+  const renderSla = (ticket: Ticket) => {
+    if (!ticket.slaDueAt) return <span className="text-slate-400">Não definido</span>;
+    const due = new Date(ticket.slaDueAt);
+    const isClosed = ['CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT', 'CANCELLED'].includes(ticket.status);
+    const overdue = !isClosed && due.getTime() < Date.now();
+    const soon = !isClosed && !overdue && due.getTime() - Date.now() <= 86400000;
+    return <div className={`flex items-center space-x-1 font-semibold ${overdue ? 'text-red-700' : soon ? 'text-amber-700' : 'text-slate-600'}`}>
+      <Clock className="w-3.5 h-3.5" />
+      <span>{due.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+      {overdue && <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold">VENCIDO</span>}
+    </div>;
+  };
 
   const getStatusBadge = (status: TicketStatus) => {
     switch (status) {
@@ -118,11 +138,29 @@ export const TicketList: React.FC<TicketListProps> = ({
             <option value="ALL">Todos os Status</option>
             <option value="NEW">Novos</option>
             <option value="TRIAGE">Em Triagem</option>
+            <option value="WAITING_DOCS">Aguardando documentos</option>
             <option value="TECHNICAL_ANALYSIS">Em Análise Técnica</option>
+            <option value="SENT_TO_TECHNICAL">Enviado à Técnica</option>
             <option value="SENT_TO_LOGISTICS">Em Logística</option>
+            <option value="WAITING_SUPPLIER">Aguardando fornecedor</option>
+            <option value="WAITING_CARRIER">Aguardando transportadora</option>
+            <option value="WAITING_CUSTOMER">Aguardando cliente</option>
+            <option value="CORRECTIVE_ACTION">Ação corretiva</option>
+            <option value="SOLUTION_PROPOSED">Solução proposta</option>
+            <option value="WAITING_CONFIRMATION">Aguardando confirmação</option>
             <option value="CLOSED_PROCEDENT">Encerrados Procedentes</option>
+            <option value="CLOSED_NON_PROCEDENT">Encerrados Não Procedentes</option>
+            <option value="REOPENED">Reabertos</option>
+            <option value="CANCELLED">Cancelados</option>
           </select>
         </div>
+
+        <label className="relative min-w-[240px] flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-slate-400" />
+          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Protocolo, cliente, produto, NF, lote..."
+            className="w-full rounded-lg border border-slate-300 bg-slate-50 py-1.5 pl-8 pr-3 outline-none focus:border-[#145EDB]" />
+        </label>
 
         <div className="flex items-center space-x-2">
           <label className="text-slate-500 font-medium">Prioridade:</label>
@@ -202,10 +240,7 @@ export const TicketList: React.FC<TicketListProps> = ({
                       {getStatusBadge(ticket.status)}
                     </td>
                     <td className="p-3.5">
-                      <div className="flex items-center space-x-1 text-slate-600 font-medium">
-                        <Clock className="w-3.5 h-3.5 text-amber-500" />
-                        <span>30/07 - 18:00</span>
-                      </div>
+                      {renderSla(ticket)}
                     </td>
                     <td className="p-3.5 text-right">
                       <button className="text-[#145EDB] font-bold group-hover:translate-x-1 transition-transform inline-flex items-center space-x-1">
@@ -268,3 +303,4 @@ export const TicketList: React.FC<TicketListProps> = ({
     </div>
   );
 };
+
