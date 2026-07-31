@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 0.7 seconds
+Output:
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar, NavView } from './components/layout/Sidebar';
@@ -84,8 +87,9 @@ export default function App() {
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
 
   // Load Initial Data
-  const loadAllData = async () => {
-    const fetchedTickets = await apiService.getTickets({ tenantId: currentTenant.id });
+  const loadAllData = async (tenantId?: string) => {
+    const effectiveTenantId = tenantId || currentUser?.tenantId || currentTenant.id;
+    const fetchedTickets = await apiService.getTickets({ tenantId: effectiveTenantId });
     setTickets(fetchedTickets);
 
     const fetchedUsers = await apiService.getUsers();
@@ -105,8 +109,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadAllData();
-  }, [currentTenant.id]);
+    if (!currentUser?.tenantId) return;
+    loadAllData(currentUser.tenantId);
+  }, [currentUser?.id, currentUser?.tenantId]);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -114,6 +119,7 @@ export default function App() {
       if (!data.session?.user) return;
       const profile = await apiService.getCurrentProfile(data.session.user.id);
       if (profile) {
+        setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
         setCurrentUser(profile);
         setIsAdminAuthenticated(['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode));
       }
@@ -205,6 +211,7 @@ export default function App() {
   });
 
   const handleAdminAuthSuccess = (profile: UserProfile) => {
+    setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
     setCurrentUser(profile);
     const hasAdminAccess = ['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode);
     setIsAdminAuthenticated(hasAdminAccess);
@@ -365,20 +372,20 @@ export default function App() {
 
               {currentView === 'audit' && (
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h1 className="text-xl font-bold text-[#10233F]">Trilha de Auditoria Imutável (Audit Logs)</h1>
-                  <p className="text-xs text-slate-500">Registro histórico de todas as alterações, aberturas, transições de status e acessos no tenant Procirúrgica</p>
+                  <h1 className="text-xl font-bold text-[#10233F]">Trilha de Auditoria ImutÃ¡vel (Audit Logs)</h1>
+                  <p className="text-xs text-slate-500">Registro histÃ³rico de todas as alteraÃ§Ãµes, aberturas, transiÃ§Ãµes de status e acessos no tenant ProcirÃºrgica</p>
                   <div className="divide-y divide-slate-100 text-xs pt-2">
                     <div className="py-2.5 flex justify-between">
                       <div>
                         <strong className="text-[#145EDB]">STATUS_CHANGED</strong> - Protocolo SAC.2607.001
-                        <p className="text-slate-500">Status alterado de EM TRIAGEM para EM ANÁLISE TÉCNICA por Dra. Patricia Lima</p>
+                        <p className="text-slate-500">Status alterado de EM TRIAGEM para EM ANÃLISE TÃ‰CNICA por Dra. Patricia Lima</p>
                       </div>
                       <span className="text-slate-400">28/07/2026 10:15</span>
                     </div>
                     <div className="py-2.5 flex justify-between">
                       <div>
                         <strong className="text-emerald-600">TICKET_CREATED</strong> - Protocolo SAC.2607.001
-                        <p className="text-slate-500">Abertura de protocolo para Hospital São Mateus Ltda por Mariana Vasconcelos</p>
+                        <p className="text-slate-500">Abertura de protocolo para Hospital SÃ£o Mateus Ltda por Mariana Vasconcelos</p>
                       </div>
                       <span className="text-slate-400">28/07/2026 09:30</span>
                     </div>
