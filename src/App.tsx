@@ -15,7 +15,7 @@ import { GritNewsPortal } from './components/grit/GritNewsPortal';
 import { AdminLoginModal } from './components/auth/AdminLoginModal';
 
 import { 
-  Tenant, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder, Carrier
+  Tenant, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder, Carrier, AuditLog
 } from './types';
 import { mockTenants, mockCustomers, mockProducts } from './lib/mockData';
 import { apiService } from './services/apiService';
@@ -83,6 +83,7 @@ export default function App() {
   const [technicalCases, setTechnicalCases] = useState<TechnicalCase[]>([]);
   const [logisticsCases, setLogisticsCases] = useState<LogisticsCase[]>([]);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
   // Load Initial Data
   const loadAllData = async (tenantId?: string) => {
@@ -113,6 +114,9 @@ export default function App() {
 
     const sOrders = await apiService.getServiceOrders();
     setServiceOrders(sOrders);
+
+    const logs = await apiService.getAuditLogs();
+    setAuditLogs(logs);
   };
 
   useEffect(() => {
@@ -380,23 +384,17 @@ export default function App() {
 
               {currentView === 'audit' && (
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h1 className="text-xl font-bold text-[#10233F]">Trilha de Auditoria Imutável (Audit Logs)</h1>
-                  <p className="text-xs text-slate-500">Registro histórico de todas as alterações, aberturas, transições de status e acessos no tenant Procirúrgica</p>
+                  <h1 className="text-xl font-bold text-[#10233F]">Trilha de Auditoria</h1>
+                  <p className="text-xs text-slate-500">Registro histórico real das alterações, aberturas e transições do SAC.</p>
                   <div className="divide-y divide-slate-100 text-xs pt-2">
-                    <div className="py-2.5 flex justify-between">
-                      <div>
-                        <strong className="text-[#145EDB]">STATUS_CHANGED</strong> - Protocolo SAC.2607.001
-                        <p className="text-slate-500">Status alterado de EM TRIAGEM para EM ANÁLISE TÉCNICA por Dra. Patricia Lima</p>
+                    {auditLogs.length === 0 && <p className="py-6 text-center text-slate-500">Nenhum evento registrado.</p>}
+                    {auditLogs.map(log => <div key={log.id} className="py-2.5 flex justify-between gap-4">
+                      <div><strong className="text-[#145EDB]">{log.action}</strong> · {log.entity}
+                        <p className="text-slate-500 break-all">{log.details}</p>
+                        <p className="text-slate-400">{log.userEmail}</p>
                       </div>
-                      <span className="text-slate-400">28/07/2026 10:15</span>
-                    </div>
-                    <div className="py-2.5 flex justify-between">
-                      <div>
-                        <strong className="text-emerald-600">TICKET_CREATED</strong> - Protocolo SAC.2607.001
-                        <p className="text-slate-500">Abertura de protocolo para Hospital São Mateus Ltda por Mariana Vasconcelos</p>
-                      </div>
-                      <span className="text-slate-400">28/07/2026 09:30</span>
-                    </div>
+                      <span className="text-slate-400 whitespace-nowrap">{new Date(log.createdAt).toLocaleString('pt-BR')}</span>
+                    </div>)}
                   </div>
                 </div>
               )}
