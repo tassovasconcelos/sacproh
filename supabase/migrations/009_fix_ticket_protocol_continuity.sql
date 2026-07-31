@@ -1,7 +1,7 @@
 -- Mantém a numeração histórica SAC.AAMMNNN (ex.: SAC.2607265)
 -- e também reconhece protocolos pontuados criados por versões anteriores.
 CREATE OR REPLACE FUNCTION generate_ticket_protocol(p_tenant_id UUID)
-RETURNS TEXT AS $$
+RETURNS VARCHAR AS $$
 DECLARE
   v_ym TEXT := TO_CHAR(NOW(), 'YYMM');
   v_existing_max INT;
@@ -78,3 +78,4 @@ BEGIN
       'reason', 'Continuidade da sequência histórica'));
 END;
 $$;
+
