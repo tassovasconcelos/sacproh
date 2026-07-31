@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Wrench, Plus, FileText, Calendar, DollarSign, CheckCircle2, AlertTriangle, Printer, Search, Clock, Edit3, Trash2 } from 'lucide-react';
 import { TechnicalCase, ServiceOrder, Ticket, UserProfile } from '../../types';
@@ -196,4 +195,3 @@ export const TechnicalModule: React.FC<TechnicalModuleProps> = ({
     </div>
   );
 };
-
