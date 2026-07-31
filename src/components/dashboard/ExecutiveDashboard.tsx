@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 import { TrendingUp, Clock, AlertTriangle, CheckCircle2, Filter, Printer, RefreshCw } from 'lucide-react';
@@ -61,6 +60,19 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
   const responsibleData = useMemo(() => (Object.entries(filtered.reduce<Record<string,number>>((acc,t)=>{const key=t.assignedToName||t.assignedArea||'Sem responsável';acc[key]=(acc[key]||0)+1;return acc;},{})) as Array<[string,number]>)
     .sort((a,b)=>b[1]-a[1]).slice(0,8),[filtered]);
 
+  const regulatoryAlerts = useMemo(() => filtered
+    .filter(ticket => !CLOSED.has(ticket.status) && ticket.status !== 'CANCELLED')
+    .map(ticket => {
+      const openedAt = new Date(ticket.createdAt).getTime();
+      const legalDueAt = openedAt + 30 * 86400000;
+      const ageDays = Math.max(0, Math.floor((Date.now() - openedAt) / 86400000));
+      const remainingDays = Math.ceil((legalDueAt - Date.now()) / 86400000);
+      const level = ageDays >= 28 ? 'CRÍTICO' : ageDays >= 25 ? 'URGENTE' : ageDays >= 20 ? 'ATENÇÃO' : null;
+      return { ticket, legalDueAt, ageDays, remainingDays, level };
+    })
+    .filter(alert => alert.level || alert.ticket.userRiskFlag || alert.ticket.adverseEventFlag)
+    .sort((a,b) => a.legalDueAt - b.legalDueAt), [filtered]);
+
   return <div className="space-y-5 print:space-y-3">
     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
       <div className="flex flex-col md:flex-row justify-between gap-3"><div><h1 className="text-xl font-bold text-[#10233F]">Relatório Gerencial do SAC</h1>
@@ -80,6 +92,19 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
       ].map(([label,value,color,icon])=><div key={String(label)} className="bg-white p-4 rounded-xl border shadow-sm"><div className="flex justify-between text-slate-500"><span className="text-[10px] font-bold uppercase">{label}</span><span className="w-4 h-4">{icon as React.ReactNode}</span></div><p className={`text-2xl font-black ${color}`}>{value}</p></div>)}
     </div>
 
+    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
+        <div><h3 className="font-bold text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-[#D92D20]"/>Central de alertas da Responsável Técnica</h3>
+          <p className="text-xs text-slate-500">Atenção no 20º dia, urgente no 25º e crítico a partir do 28º dia. Limite final: 30 dias corridos.</p></div>
+        <span className={`px-3 py-1 rounded-full text-xs font-bold ${regulatoryAlerts.length ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>{regulatoryAlerts.length} SAC(s) exigindo atenção</span>
+      </div>
+      {regulatoryAlerts.length === 0 ? <p className="text-xs text-emerald-700 bg-emerald-50 p-3 rounded-lg">Nenhum SAC atingiu os marcos internos de alerta.</p> :
+        <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="bg-slate-50"><th className="p-2 text-left">Nível</th><th className="p-2 text-left">Protocolo</th><th className="p-2 text-left">Cliente / ocorrência</th><th className="p-2 text-left">Responsável</th><th className="p-2 text-right">Prazo legal</th></tr></thead>
+          <tbody>{regulatoryAlerts.map(({ticket,legalDueAt,ageDays,remainingDays,level})=><tr key={ticket.id} className="border-t"><td className="p-2"><span className={`px-2 py-1 rounded font-bold ${level==='CRÍTICO'?'bg-red-100 text-red-700':level==='URGENTE'?'bg-orange-100 text-orange-700':'bg-amber-100 text-amber-700'}`}>{level || 'RISCO'}</span></td><td className="p-2 font-mono font-bold text-[#145EDB]">{ticket.protocol}</td><td className="p-2"><strong>{ticket.customerName}</strong><br/><span className="text-slate-500">{ticket.category} · aberto há {ageDays} dia(s)</span></td><td className="p-2">{ticket.assignedToName || ticket.assignedArea || 'Não atribuído'}</td><td className="p-2 text-right"><strong>{new Date(legalDueAt).toLocaleDateString('pt-BR')}</strong><br/><span className={remainingDays <= 2 ? 'text-red-700 font-bold' : 'text-slate-500'}>{remainingDays < 0 ? `${Math.abs(remainingDays)} dia(s) vencido` : `${remainingDays} dia(s) restante(s)`}</span></td></tr>)}</tbody>
+        </table></div>}
+      <p className="text-[10px] text-slate-500 mt-3">Casos com risco ao usuário, evento adverso ou produto essencial devem ser tratados imediatamente, independentemente da contagem de 30 dias.</p>
+    </div>
+
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <div className="lg:col-span-2 bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Pareto real por categoria</h3><p className="text-xs text-slate-500 mb-3">Volume e percentual acumulado dos SACs</p><div className="h-64"><ResponsiveContainer><BarChart data={paretoData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="cause" tick={{fontSize:9}}/><YAxis yAxisId="left"/><YAxis yAxisId="right" orientation="right" domain={[0,100]}/><Tooltip/><Bar yAxisId="left" dataKey="count" fill="#145EDB" name="SACs"/><Line yAxisId="right" dataKey="percentage" stroke="#FF8500" name="% acumulado"/></BarChart></ResponsiveContainer></div></div>
       <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Distribuição por categoria</h3><div className="h-64"><ResponsiveContainer><PieChart><Pie data={categoryData} dataKey="value" nameKey="name" outerRadius={80}>{categoryData.map((x,i)=><Cell key={i} fill={x.color}/>)}</Pie><Tooltip/><Legend wrapperStyle={{fontSize:10}}/></PieChart></ResponsiveContainer></div></div>
@@ -93,4 +118,3 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
     <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm mb-3">Carga por responsável ou área</h3><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="bg-slate-50"><th className="p-2 text-left">Responsável / área</th><th className="p-2 text-right">Chamados</th><th className="p-2 text-right">Participação</th></tr></thead><tbody>{responsibleData.map(([name,count])=><tr key={name} className="border-t"><td className="p-2">{name}</td><td className="p-2 text-right font-bold">{count}</td><td className="p-2 text-right">{metrics.total?((count/metrics.total)*100).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></div><p className="text-xs text-slate-500 mt-3">Tempo médio de resolução: <strong>{metrics.averageDays===null?'Sem encerramentos':`${metrics.averageDays.toFixed(1)} dias`}</strong></p></div>
   </div>;
 };
-
