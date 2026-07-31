@@ -1,5 +1,5 @@
 import { 
-  Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder 
+  Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage
 } from '../types';
 import { 
   mockTickets, mockCustomers, mockProducts, mockQualityPlans, mockTechnicalCases, mockLogisticsCases, mockAuditLogs, mockUsers, mockServiceOrders 
@@ -57,19 +57,21 @@ const productFromDb = (row: any): Product => ({
 
 const ticketFromDb = (row: any): Ticket => ({
   id: row.id, tenantId: row.tenant_id, protocol: row.protocol, unitId: row.unit_id || undefined,
-  customerId: row.customer_id || '', customerName: row.customer?.name || row.customer_name || 'Cliente nÃ£o identificado',
+  customerId: row.customer_id || '', customerName: row.customer?.name || row.customer_name || 'Cliente não identificado',
   customerDocument: row.customer?.document || row.customer_document || '', sellerName: row.seller_name || undefined,
   invoiceNumber: row.invoice_number || undefined, purchaseDate: row.purchase_date || undefined,
   deliveryDate: row.delivery_date || undefined, salesChannel: row.sales_channel || undefined,
+  carrierId: row.carrier_id || undefined, carrierName: row.carrier?.trade_name || row.carrier?.legal_name || undefined,
   description: row.description, category: row.category, subcategory: row.subcategory || undefined,
-  classification: row.classification || undefined, priority: row.priority, urgency: row.urgency,
+  classification: row.classification || undefined, qualificationStage: row.qualification_stage || 'REGISTRATION',
+  qualificationNotes: row.qualification_notes || undefined, priority: row.priority, urgency: row.urgency,
   impact: row.impact, initialProcedency: row.initial_procedency, userRiskFlag: row.user_risk_flag,
   adverseEventFlag: row.adverse_event_flag, damageFlag: row.damage_flag, readyForCollection: row.ready_for_collection,
   status: row.status, assignedTo: row.assigned_to || undefined, assignedArea: row.assigned_area || undefined,
   slaDueAt: row.sla_due_at || undefined, firstResponseAt: row.first_response_at || undefined,
   resolvedAt: row.resolved_at || undefined, closedAt: row.closed_at || undefined,
   finalOpinion: row.final_opinion || undefined, finalProcedency: row.final_procedency || undefined,
-  createdBy: row.created_by, createdByName: row.created_by_name || 'UsuÃ¡rio do SAC', createdAt: row.created_at, updatedAt: row.updated_at,
+  createdBy: row.created_by, createdByName: row.created_by_name || 'Usuário do SAC', createdAt: row.created_at, updatedAt: row.updated_at,
   items: (row.items || []).map((i:any) => ({ id:i.id, ticketId:i.ticket_id, productId:i.product_id || undefined,
     productName:i.product_name, sku:i.sku || undefined, quantity:i.quantity, serialNumber:i.serial_number || undefined,
     lotNumber:i.lot_number || undefined, expirationDate:i.expiration_date || undefined, anvisaRegister:i.anvisa_register || undefined })),
@@ -80,7 +82,7 @@ export const apiService = {
   // --- TICKETS ---
   async getTickets(filters?: DashboardFilters): Promise<Ticket[]> {
     if (isSupabaseConfigured) {
-      let query = supabase.from('tickets').select('*, customer:customers(name,document), items:ticket_items(*)');
+      let query = supabase.from('tickets').select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)');
       if (filters?.tenantId) query = query.eq('tenant_id', filters.tenantId);
       if (filters?.unitId) query = query.eq('unit_id', filters.unitId);
       if (filters?.status) query = query.eq('status', filters.status);
@@ -142,9 +144,12 @@ export const apiService = {
           purchase_date: ticketData.purchaseDate || null,
           delivery_date: ticketData.deliveryDate || null,
           sales_channel: ticketData.salesChannel || null,
+          carrier_id: ticketData.carrierId || null,
           description: ticketData.description,
           category: ticketData.category,
           subcategory: ticketData.subcategory,
+          qualification_stage: ticketData.qualificationStage || 'REGISTRATION',
+          qualification_notes: ticketData.qualificationNotes || null,
           priority: ticketData.priority,
           urgency: ticketData.urgency,
           impact: ticketData.impact,
@@ -156,8 +161,8 @@ export const apiService = {
           adverse_event_flag: ticketData.adverseEventFlag,
           damage_flag: ticketData.damageFlag,
           ready_for_collection: ticketData.readyForCollection
-        }]).select('*, customer:customers(name,document), items:ticket_items(*)').single();
-        if (error || !data) throw error || new Error('Chamado nÃ£o retornado pelo banco');
+        }]).select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)').single();
+        if (error || !data) throw error || new Error('Chamado não retornado pelo banco');
 
         if (ticketData.items.length) {
           const { error: itemError } = await supabase.from('ticket_items').insert(ticketData.items.map(item => ({
@@ -176,7 +181,7 @@ export const apiService = {
 
         const { data: complete } = await supabase
           .from('tickets')
-          .select('*, customer:customers(name,document), items:ticket_items(*)')
+          .select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)')
           .eq('id', data.id).single();
         return ticketFromDb(complete || data);
       } catch (err) {
@@ -245,9 +250,9 @@ export const apiService = {
     ticket.updatedAt = new Date().toISOString();
 
     // Auto update status if routing to Technical or Logistics
-    if (assignedArea.toLowerCase().includes('tÃ©cnica') || assignedArea.toLowerCase().includes('tecnica')) {
+    if (assignedArea.toLowerCase().includes('técnica') || assignedArea.toLowerCase().includes('tecnica')) {
       ticket.status = 'SENT_TO_TECHNICAL';
-    } else if (assignedArea.toLowerCase().includes('logÃ­stica') || assignedArea.toLowerCase().includes('logistica')) {
+    } else if (assignedArea.toLowerCase().includes('logística') || assignedArea.toLowerCase().includes('logistica')) {
       ticket.status = 'SENT_TO_LOGISTICS';
     }
 
@@ -258,14 +263,14 @@ export const apiService = {
       action: 'TICKET_DISPATCHED',
       entity: 'TICKET',
       entityId: ticketId,
-      details: `Chamado ${ticket.protocol} direcionado para Ã¡rea: ${assignedArea}, ResponsÃ¡vel: ${assignedToName || 'NÃ£o especificado'}. Obs: ${notes || 'Sem observaÃ§Ãµes'}`,
+      details: `Chamado ${ticket.protocol} direcionado para área: ${assignedArea}, Responsável: ${assignedToName || 'Não especificado'}. Obs: ${notes || 'Sem observações'}`,
       createdAt: new Date().toISOString()
     });
 
     return ticket;
   },
 
-  // --- SERVICE ORDERS (ORDENS DE SERVIÃ‡O - OS) ---
+  // --- SERVICE ORDERS (ORDENS DE SERVIÇO - OS) ---
   async getServiceOrders(): Promise<ServiceOrder[]> {
     return localServiceOrders;
   },
@@ -306,7 +311,7 @@ export const apiService = {
       action: 'OS_CREATED',
       entity: 'SERVICE_ORDER',
       entityId: newOS.id,
-      details: `Abertura da Ordem de ServiÃ§o ${osNumber} para o equipamento ${osData.equipmentName} do cliente ${osData.customerName}`,
+      details: `Abertura da Ordem de Serviço ${osNumber} para o equipamento ${osData.equipmentName} do cliente ${osData.customerName}`,
       createdAt: new Date().toISOString()
     });
 
@@ -329,12 +334,23 @@ export const apiService = {
   },
 
   async createUser(userData: Omit<UserProfile, 'id'>): Promise<UserProfile> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.functions.invoke('invite-user', { body: userData });
+      if (error || !data?.profile) throw new Error(error?.message || data?.error || 'Não foi possível convidar o usuário.');
+      return profileFromDb(data.profile);
+    }
     const newUser: UserProfile = {
       ...userData,
       id: 'u-' + Date.now()
     };
     localUsers.unshift(newUser);
     return newUser;
+  },
+
+  async sendPasswordReset(email: string): Promise<void> {
+    const redirectTo = `${window.location.origin}/sacproh/`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw new Error(`Não foi possível enviar o e-mail: ${error.message}`);
   },
 
   async updateUser(userId: string, updateData: Partial<UserProfile>): Promise<UserProfile | null> {
@@ -346,7 +362,7 @@ export const apiService = {
         notes: updateData.notes || null, role_code: updateData.roleCode, is_active: updateData.isActive,
         updated_at: new Date().toISOString()
       }).eq('id', userId).select().single();
-      if (error) throw new Error(`NÃ£o foi possÃ­vel salvar o usuÃ¡rio: ${error.message}`);
+      if (error) throw new Error(`Não foi possível salvar o usuário: ${error.message}`);
       return profileFromDb(data);
     }
     const idx = localUsers.findIndex(u => u.id === userId);
@@ -355,11 +371,11 @@ export const apiService = {
     return localUsers[idx];
   },
 
-  // --- RESET SYSTEM DATA ("ZERAR AS INFORMAÃ‡Ã•ES") ---
+  // --- RESET SYSTEM DATA ("ZERAR AS INFORMAÇÕES") ---
   async resetAllData(): Promise<boolean> {
     if (isSupabaseConfigured) {
       const { error } = await supabase.rpc('reset_operational_sac_data');
-      if (error) throw new Error(`NÃ£o foi possÃ­vel zerar os registros: ${error.message}`);
+      if (error) throw new Error(`Não foi possível zerar os registros: ${error.message}`);
       return true;
     }
     localTickets = [];
@@ -374,7 +390,7 @@ export const apiService = {
       userEmail: 'admin@procirurgica.com.br',
       action: 'DATA_RESET',
       entity: 'SYSTEM',
-      details: 'Todas as informaÃ§Ãµes de chamados, ordens de serviÃ§o, planos 5W2H e histÃ³ricos foram zeradas via painel administrativo.',
+      details: 'Todas as informações de chamados, ordens de serviço, planos 5W2H e históricos foram zeradas via painel administrativo.',
       createdAt: new Date().toISOString()
     });
 
@@ -385,7 +401,7 @@ export const apiService = {
     if (!tickets.length) return { imported: 0, skipped: 0 };
     if (isSupabaseConfigured) {
       const { data, error } = await supabase.rpc('import_historical_sac', { p_tickets: tickets });
-      if (error) throw new Error(`ImportaÃ§Ã£o recusada pelo banco: ${error.message}`);
+      if (error) throw new Error(`Importação recusada pelo banco: ${error.message}`);
       return data as { imported: number; skipped: number };
     }
     const before = localTickets.length;
@@ -426,7 +442,7 @@ export const apiService = {
         lgpd_consent: customer.lgpdConsent,
         lgpd_consent_at: customer.lgpdConsent ? new Date().toISOString() : null
       }).select().single();
-      if (error || !data) throw error || new Error('Cliente nÃ£o retornado pelo banco');
+      if (error || !data) throw error || new Error('Cliente não retornado pelo banco');
       return customerFromDb(data);
     }
     const created = { ...customer, id: `c-${Date.now()}` };
@@ -440,6 +456,68 @@ export const apiService = {
       if (!error) return (data || []).map(productFromDb);
     }
     return localProducts;
+  },
+
+  async getCarriers(): Promise<Carrier[]> {
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase.from('carriers').select('*').eq('is_active', true).order('legal_name');
+    if (error) return [];
+    return (data || []).map((row:any) => ({
+      id: row.id, tenantId: row.tenant_id, legalName: row.legal_name, tradeName: row.trade_name || undefined,
+      document: row.document || undefined, contactName: row.contact_name || undefined, email: row.email || undefined,
+      phone: row.phone || undefined, qualificationStatus: row.qualification_status, score: row.score ?? undefined,
+      isActive: row.is_active
+    }));
+  },
+
+  async createCarrier(carrier: Omit<Carrier, 'id'>): Promise<Carrier> {
+    const { data, error } = await supabase.from('carriers').insert({
+      tenant_id: carrier.tenantId, legal_name: carrier.legalName, trade_name: carrier.tradeName || null,
+      document: carrier.document || null, contact_name: carrier.contactName || null,
+      email: carrier.email || null, phone: carrier.phone || null,
+      qualification_status: carrier.qualificationStatus, score: carrier.score || null, is_active: carrier.isActive
+    }).select().single();
+    if (error || !data) throw new Error(`Não foi possível cadastrar a transportadora: ${error?.message || ''}`);
+    return { id:data.id, tenantId:data.tenant_id, legalName:data.legal_name, tradeName:data.trade_name || undefined,
+      document:data.document || undefined, contactName:data.contact_name || undefined, email:data.email || undefined,
+      phone:data.phone || undefined, qualificationStatus:data.qualification_status, score:data.score ?? undefined, isActive:data.is_active };
+  },
+
+  async uploadTicketAttachments(ticket: Ticket, files: File[], user: UserProfile): Promise<number> {
+    let uploaded = 0;
+    for (const file of files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${ticket.tenantId}/${ticket.id}/${Date.now()}-${safeName}`;
+      const { error: storageError } = await supabase.storage.from('sac-attachments').upload(path, file, { contentType: file.type });
+      if (storageError) throw new Error(`Falha no anexo ${file.name}: ${storageError.message}`);
+      const { error: recordError } = await supabase.from('ticket_attachments').insert({
+        ticket_id: ticket.id, tenant_id: ticket.tenantId, file_name: file.name, file_path: path,
+        file_type: file.type, file_size: file.size, uploaded_by: user.id
+      });
+      if (recordError) throw new Error(`Falha ao registrar ${file.name}: ${recordError.message}`);
+      uploaded++;
+    }
+    return uploaded;
+  },
+
+  async getTicketAttachments(ticketId: string): Promise<Array<{id:string;fileName:string;fileType:string;fileSize:number;url:string}>> {
+    const { data, error } = await supabase.from('ticket_attachments').select('*').eq('ticket_id', ticketId).order('created_at', { ascending:false });
+    if (error) return [];
+    return Promise.all((data || []).map(async (row:any) => {
+      const { data: signed } = await supabase.storage.from('sac-attachments').createSignedUrl(row.file_path, 3600);
+      return { id:row.id, fileName:row.file_name, fileType:row.file_type || '', fileSize:row.file_size || 0, url:signed?.signedUrl || '' };
+    }));
+  },
+
+  async updateTicketQualification(ticketId: string, stage: TicketQualificationStage, notes: string, user: UserProfile): Promise<void> {
+    const { error } = await supabase.from('tickets').update({
+      qualification_stage: stage, qualification_notes: notes, qualification_updated_at: new Date().toISOString(), updated_at: new Date().toISOString()
+    }).eq('id', ticketId);
+    if (error) throw new Error(`Não foi possível atualizar a qualificação: ${error.message}`);
+    await supabase.from('ticket_status_history').insert({
+      ticket_id: ticketId, previous_status: null, new_status: 'QUALIFICATION_UPDATE', changed_by: user.id,
+      changed_by_name: user.fullName, notes: `Qualificação: ${stage}. ${notes}`
+    });
   },
 
   // --- QUALITY & ACTIONS ---
@@ -488,24 +566,24 @@ export const apiService = {
     // Heuristic Fallback if Gemini key is not configured or server unreachable
     return {
       suggested_category: description.toLowerCase().includes('erro') || description.toLowerCase().includes('defeito') 
-        ? 'AssistÃªncia TÃ©cnica' 
-        : 'LogÃ­stica / Avaria',
+        ? 'Assistência Técnica' 
+        : 'Logística / Avaria',
       suggested_subcategory: description.toLowerCase().includes('erro') 
-        ? 'Falha EletrÃ´nica / Componente' 
+        ? 'Falha Eletrônica / Componente' 
         : 'Avaria em Transporte',
-      suggested_priority: description.toLowerCase().includes('cirÃºrgico') || description.toLowerCase().includes('paciente') 
+      suggested_priority: description.toLowerCase().includes('cirúrgico') || description.toLowerCase().includes('paciente') 
         ? 'CRITICAL' 
         : 'HIGH',
       suggested_severity: 'S2 - Moderada/Severa',
       summary: description.slice(0, 180) + '...',
       possible_root_causes: [
-        'Desgaste natural de componente elÃ©trico',
-        'Incompatibilidade ou oscilaÃ§Ã£o de tensÃ£o na rede hospitalar',
-        'CompressÃ£o mecÃ¢nica na embalagem secundÃ¡ria'
+        'Desgaste natural de componente elétrico',
+        'Incompatibilidade ou oscilação de tensão na rede hospitalar',
+        'Compressão mecânica na embalagem secundária'
       ],
       missing_information: [
-        'NÃºmero do Lote do Fabricante',
-        'HorÃ¡rio do evento cirÃºrgico'
+        'Número do Lote do Fabricante',
+        'Horário do evento cirúrgico'
       ],
       confidence: 88
     };
@@ -526,7 +604,7 @@ export const apiService = {
       console.warn('AI Summary endpoint fallback:', err);
     }
 
-    return `Resumo Executivo Protocolo ${ticket.protocol}: O cliente ${ticket.customerName} reportou ocorrÃªncia na categoria ${ticket.category} envolvendo o produto ${ticket.items[0]?.productName || 'nÃ£o especificado'}. Status atual: ${ticket.status}. Classificado como prioridade ${ticket.priority} devido ao impacto na operaÃ§Ã£o do cliente.`;
+    return `Resumo Executivo Protocolo ${ticket.protocol}: O cliente ${ticket.customerName} reportou ocorrência na categoria ${ticket.category} envolvendo o produto ${ticket.items[0]?.productName || 'não especificado'}. Status atual: ${ticket.status}. Classificado como prioridade ${ticket.priority} devido ao impacto na operação do cliente.`;
   },
 
   async suggestResponseWithGemini(ticket: Ticket): Promise<string> {
@@ -544,7 +622,7 @@ export const apiService = {
       console.warn('AI Response Suggestion fallback:', err);
     }
 
-    return `Prezado(a) ${ticket.customerName},\n\nAgradecemos o contato com o SAC da ProcirÃºrgica. Registramos a sua solicitaÃ§Ã£o sob o protocolo ${ticket.protocol}.\n\nNossa equipe tÃ©cnica e farmacÃªutica responsÃ¡vel iniciou a anÃ¡lise da ocorrÃªncia relacionada ao item ${ticket.items[0]?.productName || ''}. Entraremos em contato com a soluÃ§Ã£o e procedimentos para agendamento de coleta/visita em atÃ© 24 horas Ãºteis.\n\nAtenciosamente,\nEquipe de PÃ³s-Venda & Qualidade - ProcirÃºrgica`;
+    return `Prezado(a) ${ticket.customerName},\n\nAgradecemos o contato com o SAC da Procirúrgica. Registramos a sua solicitação sob o protocolo ${ticket.protocol}.\n\nNossa equipe técnica e farmacêutica responsável iniciou a análise da ocorrência relacionada ao item ${ticket.items[0]?.productName || ''}. Entraremos em contato com a solução e procedimentos para agendamento de coleta/visita em até 24 horas úteis.\n\nAtenciosamente,\nEquipe de Pós-Venda & Qualidade - Procirúrgica`;
   }
 };
 
