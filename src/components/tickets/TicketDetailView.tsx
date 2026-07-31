@@ -309,7 +309,7 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
                   <h4 className="font-bold text-slate-800">SLA & Atribuição</h4>
                   <p><strong>Área Responsável:</strong> {ticket.assignedArea}</p>
                   <p><strong>Técnico Atribuído:</strong> {ticket.assignedToName || 'Em definição'}</p>
-                  <p><strong>Vencimento SLA:</strong> {ticket.slaDueAt ? new Date(ticket.slaDueAt).toLocaleString('pt-BR') : '30/07/2026 18:00'}</p>
+                  <p><strong>Vencimento SLA:</strong> {ticket.slaDueAt ? new Date(ticket.slaDueAt).toLocaleString('pt-BR') : 'Não definido'}</p>
                 </div>
               </div>
             </div>
@@ -463,3 +463,4 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
     </div>
   );
 };
+
