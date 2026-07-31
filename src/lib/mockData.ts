@@ -5,16 +5,9 @@ import {
 export const mockTenants: Tenant[] = [
   {
     id: '11111111-1111-1111-1111-111111111111',
-    name: 'Procirúrgica Hospitalar Ltda',
+    name: 'HEALTH CLEAN COMERCIAL LTDA',
     tradeName: 'Procirúrgica',
-    document: '12.345.678/0001-90',
-    isActive: true,
-  },
-  {
-    id: '22222222-2222-2222-2222-222222222222',
-    name: 'Grupo Prohospital S.A.',
-    tradeName: 'Prohospital',
-    document: '98.765.432/0001-10',
+    document: '48.196.341/0001-00',
     isActive: true,
   }
 ];
@@ -23,26 +16,26 @@ export const mockUnits: Unit[] = [
   {
     id: 'a1111111-1111-1111-1111-111111111111',
     tenantId: '11111111-1111-1111-1111-111111111111',
-    code: 'MATRIZ',
-    name: 'Procirúrgica Matriz Fortaleza',
-    city: 'Fortaleza',
-    state: 'CE'
+    code: 'MATRIZ-SC',
+    name: 'Health Clean Matriz — Itajaí',
+    city: 'Itajaí',
+    state: 'SC'
   },
   {
     id: 'a2222222-2222-2222-2222-222222222222',
     tenantId: '11111111-1111-1111-1111-111111111111',
-    code: 'LOJA-01',
-    name: 'Procirúrgica Aldeota',
+    code: 'FILIAL-CE',
+    name: 'Health Clean Filial — Fortaleza',
     city: 'Fortaleza',
     state: 'CE'
   },
   {
     id: 'a3333333-3333-3333-3333-333333333333',
     tenantId: '11111111-1111-1111-1111-111111111111',
-    code: 'LOJA-02',
-    name: 'Procirúrgica Recife',
-    city: 'Recife',
-    state: 'PE'
+    code: 'FILIAL-SP',
+    name: 'Health Clean Filial — Itapevi',
+    city: 'Itapevi',
+    state: 'SP'
   }
 ];
 
@@ -151,35 +144,29 @@ export const mockProducts: Product[] = [
   {
     id: 'p1111111-1111-1111-1111-111111111111',
     tenantId: '11111111-1111-1111-1111-111111111111',
-    codeSku: 'BIST-ELECT-01',
-    name: 'Bisturi Eletrônico Alta Frequência HF-400W',
-    familyName: 'Equipamentos Eletromédicos',
-    model: 'HF-400W',
-    anvisaRegister: '10234567890',
-    supplierName: 'Wem Equipamentos',
-    countryOrigin: 'Brasil'
+    codeSku: 'PRO10000',
+    name: 'Cadeira de rodas',
+    familyName: 'Mobilidade e Locomoção',
+    model: 'PRO10000',
+    supplierName: 'Procirúrgica'
   },
   {
     id: 'p2222222-2222-2222-2222-222222222222',
     tenantId: '11111111-1111-1111-1111-111111111111',
-    codeSku: 'MONIT-PARAM-02',
-    name: 'Monitor Multiparamétrico Vitals Touch V-12',
-    familyName: 'Equipamentos Eletromédicos',
-    model: 'V-12 Touch',
-    anvisaRegister: '80123456789',
-    supplierName: 'Mindray Bio-Medical',
-    countryOrigin: 'China'
+    codeSku: 'CATETER-NELATON',
+    name: 'Cateter uretral hidrofílico',
+    familyName: 'Urologia',
+    model: 'Nelaton',
+    supplierName: 'Procirúrgica'
   },
   {
     id: 'p3333333-3333-3333-3333-333333333333',
     tenantId: '11111111-1111-1111-1111-111111111111',
-    codeSku: 'LUVA-STER-80',
-    name: 'Luva Cirúrgica Estéril Par Tam 8.0 (Caixa 50 pares)',
-    familyName: 'Correlatos / Descartáveis',
-    model: 'Latex Powder Free',
-    anvisaRegister: '10112233445',
-    supplierName: 'Semperit',
-    countryOrigin: 'Malásia'
+    codeSku: 'CPAP-AUTO',
+    name: 'CPAP automático',
+    familyName: 'Terapia Respiratória',
+    model: 'CPAP/APAP 4–20 cmH₂O',
+    supplierName: 'Procirúrgica'
   }
 ];
 
@@ -453,3 +440,4 @@ export const mockAuditLogs: AuditLog[] = [
     createdAt: '2026-07-28T10:15:00.000Z'
   }
 ];
+
