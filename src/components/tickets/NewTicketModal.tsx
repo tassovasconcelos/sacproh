@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   X, Plus, Trash2, Sparkles, AlertTriangle, ShieldCheck, Upload, FileText, CheckCircle 
 } from 'lucide-react';
-import { Customer, Product, Ticket, TicketPriority, UserProfile } from '../../types';
+import { Carrier, Customer, Product, Ticket, TicketPriority, UserProfile } from '../../types';
 import { apiService } from '../../services/apiService';
 
 interface NewTicketModalProps {
@@ -10,6 +10,7 @@ interface NewTicketModalProps {
   products: Product[];
   currentTenantId: string;
   currentUser: UserProfile;
+  carriers: Carrier[];
   onClose: () => void;
   onTicketCreated: (ticket: Ticket) => void;
 }
@@ -19,6 +20,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   products,
   currentTenantId,
   currentUser,
+  carriers,
   onClose,
   onTicketCreated
 }) => {
@@ -38,6 +40,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [purchaseDate, setPurchaseDate] = useState<string>('');
   const [deliveryDate, setDeliveryDate] = useState<string>('');
   const [salesChannel, setSalesChannel] = useState<string>('NAO_INFORMADO');
+  const [selectedCarrierId, setSelectedCarrierId] = useState('');
+  const [showNewCarrier, setShowNewCarrier] = useState(false);
+  const [newCarrier, setNewCarrier] = useState({ legalName:'', tradeName:'', document:'', contactName:'', email:'', phone:'' });
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -51,7 +57,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   }[]>([
     {
       productId: products[0]?.id || '',
-      productName: products[0]?.name || 'Bisturi EletrÃ´nico',
+      productName: products[0]?.name || 'Bisturi Eletrônico',
       quantity: 1,
       serialNumber: '',
       lotNumber: ''
@@ -60,7 +66,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
   // Occurrence State
   const [description, setDescription] = useState<string>('');
-  const [category, setCategory] = useState<string>('AssistÃªncia TÃ©cnica');
+  const [category, setCategory] = useState<string>('Assistência Técnica');
   const [subcategory, setSubcategory] = useState<string>('Defeito de Componente');
   const [priority, setPriority] = useState<TicketPriority>('HIGH');
   const [userRiskFlag, setUserRiskFlag] = useState<boolean>(false);
@@ -122,6 +128,11 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         });
       }
       if (!customer) throw new Error('Selecione ou cadastre um cliente.');
+      let carrier = carriers.find(item => item.id === selectedCarrierId);
+      if (showNewCarrier && newCarrier.legalName.trim()) {
+        carrier = await apiService.createCarrier({ ...newCarrier, legalName:newCarrier.legalName.trim(),
+          tenantId:currentTenantId, qualificationStatus:'PENDING', isActive:true });
+      }
 
       const newTicketData = {
       tenantId: currentTenantId,
@@ -133,9 +144,12 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       purchaseDate: purchaseDate || undefined,
       deliveryDate: deliveryDate || undefined,
       salesChannel,
+      carrierId: carrier?.id,
+      carrierName: carrier?.tradeName || carrier?.legalName,
       description,
       category,
       subcategory,
+      qualificationStage: 'REGISTRATION' as const,
       priority,
       urgency: priority,
       impact: priority,
@@ -161,9 +175,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       };
 
       const created = await apiService.createTicket(newTicketData);
+      if (attachments.length) await apiService.uploadTicketAttachments(created, attachments, currentUser);
       onTicketCreated(created);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'NÃ£o foi possÃ­vel abrir o chamado.');
+      setSubmitError(error instanceof Error ? error.message : 'Não foi possível abrir o chamado.');
     } finally {
       setIsSubmitting(false);
     }
@@ -177,7 +192,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         <div className="bg-[#0B2343] text-white px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold">Abertura de Novo Chamado SAC</h2>
-            <p className="text-xs text-slate-300">GeraÃ§Ã£o automÃ¡tica de protocolo Ãºnico SAC.2607.XXX</p>
+            <p className="text-xs text-slate-300">Geração automática de protocolo único SAC.2607.XXX</p>
           </div>
           <button 
             onClick={onClose}
@@ -201,7 +216,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           <div className="h-0.5 bg-slate-300 flex-1 mx-4"></div>
           <div className={`flex items-center space-x-2 ${step >= 3 ? 'text-[#145EDB]' : ''}`}>
             <span className="w-5 h-5 rounded-full bg-[#145EDB] text-white flex items-center justify-center text-[10px]">3</span>
-            <span>OcorrÃªncia & RegulatÃ³rio</span>
+            <span>Ocorrência & Regulatório</span>
           </div>
         </div>
 
@@ -240,11 +255,11 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                     <label className="sm:col-span-1 font-semibold text-slate-700">Tipo *
                       <select value={newCustomer.type} onChange={e => setNewCustomer({...newCustomer, type: e.target.value as Customer['type']})}
                         className="mt-1 w-full bg-white border border-slate-300 rounded-lg p-2">
-                        <option value="PF">Pessoa fÃ­sica</option><option value="PJ">Empresa</option>
-                        <option value="CLINIC">ClÃ­nica</option><option value="HOSPITAL">Hospital</option>
+                        <option value="PF">Pessoa física</option><option value="PJ">Empresa</option>
+                        <option value="CLINIC">Clínica</option><option value="HOSPITAL">Hospital</option>
                       </select>
                     </label>
-                    <label className="sm:col-span-2 font-semibold text-slate-700">Nome / RazÃ£o social *
+                    <label className="sm:col-span-2 font-semibold text-slate-700">Nome / Razão social *
                       <input value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer,name:e.target.value})} required
                         className="mt-1 w-full bg-white border border-slate-300 rounded-lg p-2" />
                     </label>
@@ -276,17 +291,17 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                   <label className="block text-slate-700 font-semibold mb-1">Canal de venda *</label>
                   <select value={salesChannel} onChange={(e) => setSalesChannel(e.target.value)} required
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:border-[#145EDB] outline-none">
-                    <option value="NAO_INFORMADO">NÃ£o informado</option>
-                    <option value="LOJA_FISICA">Loja fÃ­sica</option><option value="E_COMMERCE">E-commerce prÃ³prio</option>
+                    <option value="NAO_INFORMADO">Não informado</option>
+                    <option value="LOJA_FISICA">Loja física</option><option value="E_COMMERCE">E-commerce próprio</option>
                     <option value="MARKETPLACE">Marketplace</option><option value="REPRESENTANTE">Representante comercial</option>
                     <option value="VENDA_DIRETA">Venda direta</option><option value="DISTRIBUIDOR_REVENDEDOR">Distribuidor / revendedor</option>
-                    <option value="LICITACAO">LicitaÃ§Ã£o / contrato pÃºblico</option>
+                    <option value="LICITACAO">Licitação / contrato público</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-slate-700 font-semibold mb-1">{salesChannel === 'LOJA_FISICA' ? 'Nome da loja *' : 'Loja / parceiro / vendedor'}</label>
                   <input type="text" value={sellerName} onChange={(e) => setSellerName(e.target.value)} required={salesChannel === 'LOJA_FISICA'}
-                    placeholder={salesChannel === 'LOJA_FISICA' ? 'Informe a loja onde comprou' : 'IdentificaÃ§Ã£o da origem'}
+                    placeholder={salesChannel === 'LOJA_FISICA' ? 'Informe a loja onde comprou' : 'Identificação da origem'}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:border-[#145EDB] outline-none" />
                 </div>
                 <div>
@@ -307,6 +322,26 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                   <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg p-2" />
                 </label>
               </div>
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex justify-between items-center"><strong>Transportadora vinculada</strong>
+                  <button type="button" onClick={() => setShowNewCarrier(!showNewCarrier)} className="text-[#145EDB] font-bold">{showNewCarrier ? 'Selecionar cadastrada' : '+ Cadastrar transportadora'}</button>
+                </div>
+                {!showNewCarrier ? (
+                  <select value={selectedCarrierId} onChange={e=>setSelectedCarrierId(e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg p-2">
+                    <option value="">Sem transportadora definida</option>
+                    {carriers.map(carrier => <option key={carrier.id} value={carrier.id}>{carrier.tradeName || carrier.legalName} — {carrier.qualificationStatus}</option>)}
+                  </select>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <input placeholder="Razão social *" value={newCarrier.legalName} onChange={e=>setNewCarrier({...newCarrier,legalName:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input placeholder="Nome fantasia" value={newCarrier.tradeName} onChange={e=>setNewCarrier({...newCarrier,tradeName:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input placeholder="CNPJ" value={newCarrier.document} onChange={e=>setNewCarrier({...newCarrier,document:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input placeholder="Contato" value={newCarrier.contactName} onChange={e=>setNewCarrier({...newCarrier,contactName:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input type="email" placeholder="E-mail" value={newCarrier.email} onChange={e=>setNewCarrier({...newCarrier,email:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input placeholder="Telefone" value={newCarrier.phone} onChange={e=>setNewCarrier({...newCarrier,phone:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -314,7 +349,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           {step === 2 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm text-[#10233F]">Itens e Produtos Envolvidos na OcorrÃªncia</h3>
+                <h3 className="font-bold text-sm text-[#10233F]">Itens e Produtos Envolvidos na Ocorrência</h3>
                 <button
                   type="button"
                   onClick={handleAddItem}
@@ -379,7 +414,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-slate-600 font-semibold mb-1">NÂº SÃ©rie</label>
+                          <label className="block text-slate-600 font-semibold mb-1">Nº Série</label>
                           <input
                             type="text"
                             placeholder="SN-XXX"
@@ -414,11 +449,11 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             </div>
           )}
 
-          {/* STEP 3: OCORRÃŠNCIA E REGULATÃ“RIO */}
+          {/* STEP 3: OCORRÊNCIA E REGULATÓRIO */}
           {step === 3 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm text-[#10233F]">Relato da OcorrÃªncia & ClassificaÃ§Ã£o RegulatÃ³rio</h3>
+                <h3 className="font-bold text-sm text-[#10233F]">Relato da Ocorrência & Classificação Regulatório</h3>
                 
                 {/* AI Assistant Button */}
                 <button
@@ -438,7 +473,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                   rows={4}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descreva o problema relatado pelo cliente em detalhes (cÃ³digo de erro, avaria, defeito, condiÃ§Ãµes de cirurgia...)"
+                  placeholder="Descreva o problema relatado pelo cliente em detalhes (código de erro, avaria, defeito, condições de cirurgia...)"
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-900 focus:border-[#145EDB] outline-none"
                   required
                 />
@@ -452,10 +487,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900"
                   >
-                    <option value="AssistÃªncia TÃ©cnica">AssistÃªncia TÃ©cnica</option>
-                    <option value="LogÃ­stica / Avaria">LogÃ­stica / Avaria</option>
-                    <option value="Qualidade / ValidaÃ§Ã£o">Qualidade / ValidaÃ§Ã£o</option>
-                    <option value="Comercial / DevoluÃ§Ã£o">Comercial / DevoluÃ§Ã£o</option>
+                    <option value="Assistência Técnica">Assistência Técnica</option>
+                    <option value="Logística / Avaria">Logística / Avaria</option>
+                    <option value="Qualidade / Validação">Qualidade / Validação</option>
+                    <option value="Comercial / Devolução">Comercial / Devolução</option>
                   </select>
                 </div>
 
@@ -476,19 +511,28 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                     onChange={(e) => setPriority(e.target.value as TicketPriority)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-slate-900"
                   >
-                    <option value="CRITICAL">CrÃ­tica (Risco CirÃºrgico)</option>
+                    <option value="CRITICAL">Crítica (Risco Cirúrgico)</option>
                     <option value="HIGH">Alta</option>
-                    <option value="MEDIUM">MÃ©dia</option>
+                    <option value="MEDIUM">Média</option>
                     <option value="LOW">Baixa</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+                <label className="font-bold text-[#10233F] flex items-center gap-2"><Upload className="w-4 h-4" /> Imagens e vídeos da ocorrência</label>
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+                  onChange={e=>setAttachments(Array.from(e.target.files || []))}
+                  className="w-full bg-white border border-blue-200 rounded-lg p-2" />
+                <p className="text-[11px] text-slate-500">Formatos aceitos: JPG, PNG, WEBP, MP4, WEBM e MOV. Os arquivos acompanharão o protocolo.</p>
+                {attachments.length > 0 && <p className="font-semibold text-blue-800">{attachments.length} arquivo(s) selecionado(s): {attachments.map(f=>f.name).join(', ')}</p>}
               </div>
 
               {/* Regulatory Risk Checkboxes (ANVISA/LGPD) */}
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-2">
                 <span className="font-bold text-amber-900 flex items-center space-x-1.5">
                   <ShieldCheck className="w-4 h-4 text-amber-600" />
-                  <span>AvaliaÃ§Ã£o do FarmacÃªutico / Resp. TÃ©cnico (ANVISA)</span>
+                  <span>Avaliação do Farmacêutico / Resp. Técnico (ANVISA)</span>
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-800">
@@ -499,7 +543,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                       onChange={(e) => setUserRiskFlag(e.target.checked)}
                       className="rounded text-[#145EDB] focus:ring-0"
                     />
-                    <span>PossÃ­vel Risco de Dano ao UsuÃ¡rio/Paciente</span>
+                    <span>Possível Risco de Dano ao Usuário/Paciente</span>
                   </label>
 
                   <label className="flex items-center space-x-2 font-medium cursor-pointer">
@@ -509,7 +553,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                       onChange={(e) => setAdverseEventFlag(e.target.checked)}
                       className="rounded text-[#145EDB] focus:ring-0"
                     />
-                    <span>NotificaÃ§Ã£o de Evento Adverso / Queixa TÃ©cnica</span>
+                    <span>Notificação de Evento Adverso / Queixa Técnica</span>
                   </label>
 
                   <label className="flex items-center space-x-2 font-medium cursor-pointer">
@@ -519,7 +563,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                       onChange={(e) => setDamageFlag(e.target.checked)}
                       className="rounded text-[#145EDB] focus:ring-0"
                     />
-                    <span>Avaria FÃ­sica na Embalagem/Produto</span>
+                    <span>Avaria Física na Embalagem/Produto</span>
                   </label>
 
                   <label className="flex items-center space-x-2 font-medium cursor-pointer">
@@ -529,7 +573,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                       onChange={(e) => setReadyForCollection(e.target.checked)}
                       className="rounded text-[#145EDB] focus:ring-0"
                     />
-                    <span>Produto DisponÃ­vel para Coleta na Unidade</span>
+                    <span>Produto Disponível para Coleta na Unidade</span>
                   </label>
                 </div>
               </div>
@@ -555,7 +599,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                 onClick={() => setStep(step + 1)}
                 className="px-5 py-2 bg-[#145EDB] hover:bg-[#0f4bb3] font-bold text-white rounded-lg shadow"
               >
-                PrÃ³ximo Passo
+                Próximo Passo
               </button>
             ) : (
               <button
