@@ -89,8 +89,7 @@ export const apiService = {
       if (filters?.priority) query = query.eq('priority', filters.priority);
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) {
-        console.error('Supabase fetch tickets error:', error);
-        return localTickets;
+        throw new Error(`Não foi possível carregar os chamados: ${error.message}`);
       }
       return (data || []).map(ticketFromDb);
     }
@@ -110,8 +109,8 @@ export const apiService = {
         .select('*, items:ticket_items(*)')
         .eq('id', id)
         .single();
-      if (error) return localTickets.find(t => t.id === id) || null;
-      return data as unknown as Ticket;
+      if (error) throw new Error(`Não foi possível carregar o chamado: ${error.message}`);
+      return ticketFromDb(data);
     }
     return localTickets.find(t => t.id === id) || null;
   },
@@ -208,6 +207,35 @@ export const apiService = {
   },
 
   async updateTicketStatus(ticketId: string, newStatus: TicketStatus, notes: string, user: string): Promise<Ticket | null> {
+    if (isSupabaseConfigured) {
+      const allowed: Partial<Record<TicketStatus, TicketStatus[]>> = {
+        NEW: ['TRIAGE'],
+        TRIAGE: ['TECHNICAL_ANALYSIS', 'SENT_TO_TECHNICAL', 'SENT_TO_LOGISTICS'],
+        TECHNICAL_ANALYSIS: ['SENT_TO_LOGISTICS', 'WAITING_CUSTOMER', 'WAITING_SUPPLIER', 'CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT'],
+        SENT_TO_TECHNICAL: ['TECHNICAL_ANALYSIS', 'WAITING_CUSTOMER', 'WAITING_SUPPLIER', 'CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT'],
+        SENT_TO_LOGISTICS: ['TECHNICAL_ANALYSIS', 'WAITING_CUSTOMER', 'CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT'],
+        WAITING_CUSTOMER: ['TRIAGE', 'TECHNICAL_ANALYSIS', 'SENT_TO_LOGISTICS'],
+        WAITING_SUPPLIER: ['TECHNICAL_ANALYSIS', 'CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT']
+      };
+      const { data: current, error: fetchError } = await supabase.from('tickets').select('*').eq('id', ticketId).single();
+      if (fetchError || !current) throw new Error(`Chamado não encontrado: ${fetchError?.message || ''}`);
+      if (current.status !== newStatus && !(allowed[current.status as TicketStatus] || []).includes(newStatus)) {
+        throw new Error(`Transição de ${current.status} para ${newStatus} não é permitida.`);
+      }
+      const now = new Date().toISOString();
+      const closed = newStatus === 'CLOSED_PROCEDENT' || newStatus === 'CLOSED_NON_PROCEDENT';
+      const { data, error } = await supabase.from('tickets').update({
+        status: newStatus, updated_at: now, closed_at: closed ? now : null,
+        resolved_at: closed ? (current.resolved_at || now) : current.resolved_at
+      }).eq('id', ticketId).select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)').single();
+      if (error || !data) throw new Error(`Não foi possível alterar o status: ${error?.message || ''}`);
+      const { data: profile } = await supabase.from('profiles').select('full_name,email,tenant_id').eq('id', user).single();
+      await Promise.all([
+        supabase.from('ticket_status_history').insert({ ticket_id: ticketId, previous_status: current.status, new_status: newStatus, changed_by: user, changed_by_name: profile?.full_name || 'Usuário', notes }),
+        supabase.from('audit_logs').insert({ tenant_id: current.tenant_id, user_id: user, user_email: profile?.email || null, action: 'STATUS_CHANGED', entity: 'TICKET', entity_id: ticketId, details: { previous_status: current.status, new_status: newStatus, notes } })
+      ]);
+      return ticketFromDb(data);
+    }
     const ticket = localTickets.find(t => t.id === ticketId);
     if (!ticket) return null;
 
@@ -241,6 +269,22 @@ export const apiService = {
     notes?: string, 
     userEmail?: string
   ): Promise<Ticket | null> {
+    if (isSupabaseConfigured) {
+      const { data: current, error: fetchError } = await supabase.from('tickets').select('*').eq('id', ticketId).single();
+      if (fetchError || !current) throw new Error(`Chamado não encontrado: ${fetchError?.message || ''}`);
+      const area = assignedArea.toLocaleLowerCase('pt-BR');
+      const nextStatus: TicketStatus = area.includes('técnica') || area.includes('tecnica') ? 'SENT_TO_TECHNICAL'
+        : area.includes('logística') || area.includes('logistica') ? 'SENT_TO_LOGISTICS' : current.status;
+      const { data, error } = await supabase.from('tickets').update({ assigned_area: assignedArea, assigned_to: assignedToId || null, status: nextStatus, updated_at: new Date().toISOString() })
+        .eq('id', ticketId).select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)').single();
+      if (error || !data) throw new Error(`Não foi possível encaminhar o chamado: ${error?.message || ''}`);
+      const { data: actor } = await supabase.auth.getUser();
+      await Promise.all([
+        current.status !== nextStatus ? supabase.from('ticket_status_history').insert({ ticket_id: ticketId, previous_status: current.status, new_status: nextStatus, changed_by: actor.user?.id || null, changed_by_name: userEmail || 'Usuário', notes }) : Promise.resolve(),
+        supabase.from('audit_logs').insert({ tenant_id: current.tenant_id, user_id: actor.user?.id || null, user_email: userEmail || actor.user?.email || null, action: 'TICKET_DISPATCHED', entity: 'TICKET', entity_id: ticketId, details: { assigned_area: assignedArea, assigned_to: assignedToId || null, assigned_to_name: assignedToName || null, notes: notes || null } })
+      ]);
+      return ticketFromDb(data);
+    }
     const ticket = localTickets.find(t => t.id === ticketId);
     if (!ticket) return null;
 
@@ -272,6 +316,11 @@ export const apiService = {
 
   // --- SERVICE ORDERS (ORDENS DE SERVIÇO - OS) ---
   async getServiceOrders(): Promise<ServiceOrder[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('service_orders').select('*, ticket:tickets(protocol,customer:customers(name)), technician:profiles(full_name)').order('opened_at', { ascending: false });
+      if (error) throw new Error(`Não foi possível carregar as ordens de serviço: ${error.message}`);
+      return (data || []).map((row:any) => ({ id:row.id, osNumber:row.os_number, ticketId:row.ticket_id, protocol:row.ticket?.protocol || '', customerName:row.ticket?.customer?.name || '', equipmentName:row.equipment_name, serialNumber:row.serial_number || undefined, technicianId:row.technician_id || '', technicianName:row.technician?.full_name || '', serviceType:row.service_type, urgency:'MEDIUM', diagnostic:row.diagnostic || '', partsReplaced:row.parts_replaced || undefined, estimatedCost:Number(row.estimated_cost || 0), status:row.status, openedAt:row.opened_at, closedAt:row.completed_at || undefined }));
+    }
     return localServiceOrders;
   },
 
@@ -286,6 +335,15 @@ export const apiService = {
       osNumber,
       openedAt: new Date().toISOString()
     };
+
+    if (isSupabaseConfigured) {
+      const { data: ticket, error: ticketError } = await supabase.from('tickets').select('tenant_id').eq('id', osData.ticketId).single();
+      if (ticketError || !ticket) throw new Error('Chamado da ordem de serviço não encontrado.');
+      const { data, error } = await supabase.from('service_orders').insert({ tenant_id:ticket.tenant_id, ticket_id:osData.ticketId, os_number:osNumber, technician_id:osData.technicianId || null, service_type:osData.serviceType, equipment_name:osData.equipmentName, serial_number:osData.serialNumber || null, diagnostic:osData.diagnostic || null, parts_replaced:osData.partsReplaced || null, estimated_cost:osData.estimatedCost, status:osData.status }).select().single();
+      if (error || !data) throw new Error(`Não foi possível criar a ordem de serviço: ${error?.message || ''}`);
+      await supabase.from('audit_logs').insert({ tenant_id:ticket.tenant_id, user_id:osData.technicianId || null, action:'OS_CREATED', entity:'SERVICE_ORDER', entity_id:data.id, details:{ os_number:osNumber, ticket_id:osData.ticketId } });
+      return { ...newOS, id:data.id, openedAt:data.opened_at };
+    }
 
     localServiceOrders.unshift(newOS);
 
@@ -509,6 +567,20 @@ export const apiService = {
     }));
   },
 
+  async getTicketComments(ticketId: string): Promise<Array<{id:string;author:string;content:string;date:string;internal:boolean}>> {
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase.from('ticket_comments').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
+    if (error) throw new Error(`Não foi possível carregar os comentários: ${error.message}`);
+    return (data || []).map((row:any) => ({ id:row.id, author:row.author_name, content:row.content, date:new Date(row.created_at).toLocaleString('pt-BR'), internal:Boolean(row.is_internal) }));
+  },
+
+  async createTicketComment(ticket: Ticket, content: string, internal: boolean, user: UserProfile): Promise<{id:string;author:string;content:string;date:string;internal:boolean}> {
+    const { data, error } = await supabase.from('ticket_comments').insert({ ticket_id:ticket.id, author_id:user.id, author_name:user.fullName, is_internal:internal, content:content.trim() }).select().single();
+    if (error || !data) throw new Error(`Não foi possível salvar o comentário: ${error?.message || ''}`);
+    await supabase.from('audit_logs').insert({ tenant_id:ticket.tenantId, user_id:user.id, user_email:user.email, action:'COMMENT_CREATED', entity:'TICKET', entity_id:ticket.id, details:{ comment_id:data.id, internal } });
+    return { id:data.id, author:data.author_name, content:data.content, date:new Date(data.created_at).toLocaleString('pt-BR'), internal:Boolean(data.is_internal) };
+  },
+
   async updateTicketQualification(ticketId: string, stage: TicketQualificationStage, notes: string, user: UserProfile): Promise<void> {
     const { error } = await supabase.from('tickets').update({
       qualification_stage: stage, qualification_notes: notes, qualification_updated_at: new Date().toISOString(), updated_at: new Date().toISOString()
@@ -545,6 +617,11 @@ export const apiService = {
 
   // --- AUDIT LOGS ---
   async getAuditLogs(): Promise<AuditLog[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending:false }).limit(500);
+      if (error) throw new Error(`Não foi possível carregar a auditoria: ${error.message}`);
+      return (data || []).map((row:any) => ({ id:row.id, userId:row.user_id || '', userEmail:row.user_email || 'Sistema', action:row.action, entity:row.entity, entityId:row.entity_id || undefined, details:typeof row.details === 'string' ? row.details : JSON.stringify(row.details || {}), createdAt:row.created_at }));
+    }
     return localAuditLogs;
   },
 
