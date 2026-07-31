@@ -107,10 +107,9 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
         .eq('id', data.user.id)
         .single();
 
-      const allowedRoles = ['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'];
-      if (profileError || !profile?.is_active || !allowedRoles.includes(profile.role_code)) {
+      if (profileError || !profile?.is_active) {
         await supabase.auth.signOut();
-        setErrorMsg('Seu usuário não possui permissão administrativa ativa.');
+        setErrorMsg('Seu usuário não possui um perfil ativo no SAC.');
         return;
       }
       onSuccess({
