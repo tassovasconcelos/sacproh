@@ -346,7 +346,25 @@ export const apiService = {
 
   async createServiceOrder(osData: Omit<ServiceOrder, 'id' | 'osNumber' | 'openedAt'>): Promise<ServiceOrder> {
     const seq = (localServiceOrders.length + 1).toString().padStart(4, '0');
-    const year = new…372 tokens truncated…nId || null, action:'OS_CREATED', entity:'SERVICE_ORDER', entity_id:data.id, details:{ os_number:officialOSNumber, ticket_id:osData.ticketId } });
+    const year = new Date().getFullYear();
+    const osNumber = `OS-${year}-${seq}`;
+
+    const newOS: ServiceOrder = {
+      ...osData,
+      id: 'os-' + Date.now(),
+      osNumber,
+      openedAt: new Date().toISOString()
+    };
+
+    if (isSupabaseConfigured) {
+      const { data: ticket, error: ticketError } = await supabase.from('tickets').select('tenant_id').eq('id', osData.ticketId).single();
+      if (ticketError || !ticket) throw new Error('Chamado da ordem de serviço não encontrado.');
+      const { data: generatedOS, error: sequenceError } = await supabase.rpc('generate_service_order_number',{p_tenant_id:ticket.tenant_id});
+      if(sequenceError) throw new Error(`Não foi possível gerar a sequência da OS: ${sequenceError.message}`);
+      const officialOSNumber=generatedOS || osNumber;
+      const { data, error } = await supabase.from('service_orders').insert({ tenant_id:ticket.tenant_id, ticket_id:osData.ticketId, os_number:officialOSNumber, technician_id:osData.technicianId || null, service_type:osData.serviceType, equipment_name:osData.equipmentName, serial_number:osData.serialNumber || null, diagnostic:osData.diagnostic || null, parts_replaced:osData.partsReplaced || null, estimated_cost:osData.estimatedCost, status:osData.status }).select().single();
+      if (error || !data) throw new Error(`Não foi possível criar a ordem de serviço: ${error?.message || ''}`);
+      await supabase.from('audit_logs').insert({ tenant_id:ticket.tenant_id, user_id:osData.technicianId || null, action:'OS_CREATED', entity:'SERVICE_ORDER', entity_id:data.id, details:{ os_number:officialOSNumber, ticket_id:osData.ticketId } });
       return { ...newOS, id:data.id, osNumber:officialOSNumber, openedAt:data.opened_at };
     }
 
@@ -733,4 +751,3 @@ export const apiService = {
     return `Prezado(a) ${ticket.customerName},\n\nAgradecemos o contato com o SAC da Procirúrgica. Registramos a sua solicitação sob o protocolo ${ticket.protocol}.\n\nNossa equipe técnica e farmacêutica responsável iniciou a análise da ocorrência relacionada ao item ${ticket.items[0]?.productName || ''}. Entraremos em contato com a solução e procedimentos para agendamento de coleta/visita em até 24 horas úteis.\n\nAtenciosamente,\nEquipe de Pós-Venda & Qualidade - Procirúrgica`;
   }
 };
-
