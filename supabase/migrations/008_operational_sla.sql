@@ -4,10 +4,10 @@ INSERT INTO sla_policies (tenant_id, category, priority, first_response_minutes,
 SELECT t.id, NULL, policy.priority, policy.first_response_minutes, policy.resolution_minutes, TRUE
 FROM tenants t
 CROSS JOIN (VALUES
-  ('CRITICAL', 30, 240),
-  ('HIGH', 60, 480),
-  ('MEDIUM', 240, 1440),
-  ('LOW', 480, 2880)
+  ('CRITICAL', 30, 43200),
+  ('HIGH', 60, 43200),
+  ('MEDIUM', 240, 43200),
+  ('LOW', 480, 43200)
 ) AS policy(priority, first_response_minutes, resolution_minutes)
 WHERE NOT EXISTS (
   SELECT 1 FROM sla_policies current_policy
@@ -31,9 +31,7 @@ BEGIN
   LIMIT 1;
 
   IF resolution_limit IS NULL THEN
-    resolution_limit := CASE NEW.priority
-      WHEN 'CRITICAL' THEN 240 WHEN 'HIGH' THEN 480
-      WHEN 'LOW' THEN 2880 ELSE 1440 END;
+    resolution_limit := 43200; -- 30 dias corridos: limite do art. 18, § 1º, do CDC
   END IF;
 
   IF NEW.sla_due_at IS NULL
@@ -59,7 +57,6 @@ SET sla_due_at = ticket.created_at + make_interval(mins => COALESCE((
     AND (policy.category = ticket.category OR policy.category IS NULL)
   ORDER BY (policy.category IS NOT NULL) DESC
   LIMIT 1
-), CASE ticket.priority WHEN 'CRITICAL' THEN 240 WHEN 'HIGH' THEN 480 WHEN 'LOW' THEN 2880 ELSE 1440 END))
+), 43200))
 WHERE ticket.sla_due_at IS NULL
   AND ticket.status NOT IN ('CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT', 'CANCELLED');
-
