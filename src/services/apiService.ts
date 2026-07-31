@@ -262,6 +262,25 @@ export const apiService = {
     return ticket;
   },
 
+  async updateTicket(ticket: Ticket, changes: Partial<Ticket>, user: UserProfile): Promise<Ticket> {
+    const { data, error } = await supabase.from('tickets').update({
+      description:changes.description ?? ticket.description, category:changes.category ?? ticket.category,
+      subcategory:changes.subcategory ?? ticket.subcategory ?? null, priority:changes.priority ?? ticket.priority,
+      urgency:changes.urgency ?? ticket.urgency, impact:changes.impact ?? ticket.impact,
+      invoice_number:changes.invoiceNumber ?? ticket.invoiceNumber ?? null, seller_name:changes.sellerName ?? ticket.sellerName ?? null,
+      sales_channel:changes.salesChannel ?? ticket.salesChannel ?? null, assigned_area:changes.assignedArea ?? ticket.assignedArea ?? null,
+      updated_at:new Date().toISOString()
+    }).eq('id',ticket.id).select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)').single();
+    if(error || !data) throw new Error(`Não foi possível editar o SAC: ${error?.message || ''}`);
+    await supabase.from('audit_logs').insert({tenant_id:ticket.tenantId,user_id:user.id,user_email:user.email,action:'TICKET_UPDATED',entity:'TICKET',entity_id:ticket.id,details:{protocol:ticket.protocol,fields:Object.keys(changes)}});
+    return ticketFromDb(data);
+  },
+
+  async deleteTicket(ticket: Ticket, reason: string): Promise<void> {
+    const { error } = await supabase.rpc('delete_ticket_controlled',{p_ticket_id:ticket.id,p_reason:reason});
+    if(error) throw new Error(`Não foi possível excluir o SAC: ${error.message}`);
+  },
+
   async dispatchTicket(
     ticketId: string, 
     assignedArea: string, 
@@ -332,18 +351,10 @@ export const apiService = {
 
     const newOS: ServiceOrder = {
       ...osData,
-      id: 'os-' + Date.now(),
-      osNumber,
-      openedAt: new Date().toISOString()
-    };
-
-    if (isSupabaseConfigured) {
-      const { data: ticket, error: ticketError } = await supabase.from('tickets').select('tenant_id').eq('id', osData.ticketId).single();
-      if (ticketError || !ticket) throw new Error('Chamado da ordem de serviço não encontrado.');
-      const { data, error } = await supabase.from('service_orders').insert({ tenant_id:ticket.tenant_id, ticket_id:osData.ticketId, os_number:osNumber, technician_id:osData.technicianId || null, service_type:osData.serviceType, equipment_name:osData.equipmentName, serial_number:osData.serialNumber || null, diagnostic:osData.diagnostic || null, parts_replaced:osData.partsReplaced || null, estimated_cost:osData.estimatedCost, status:osData.status }).select().single();
+      id: …238 tokens truncated…:osData.serialNumber || null, diagnostic:osData.diagnostic || null, parts_replaced:osData.partsReplaced || null, estimated_cost:osData.estimatedCost, status:osData.status }).select().single();
       if (error || !data) throw new Error(`Não foi possível criar a ordem de serviço: ${error?.message || ''}`);
-      await supabase.from('audit_logs').insert({ tenant_id:ticket.tenant_id, user_id:osData.technicianId || null, action:'OS_CREATED', entity:'SERVICE_ORDER', entity_id:data.id, details:{ os_number:osNumber, ticket_id:osData.ticketId } });
-      return { ...newOS, id:data.id, openedAt:data.opened_at };
+      await supabase.from('audit_logs').insert({ tenant_id:ticket.tenant_id, user_id:osData.technicianId || null, action:'OS_CREATED', entity:'SERVICE_ORDER', entity_id:data.id, details:{ os_number:officialOSNumber, ticket_id:osData.ticketId } });
+      return { ...newOS, id:data.id, osNumber:officialOSNumber, openedAt:data.opened_at };
     }
 
     localServiceOrders.unshift(newOS);
@@ -375,6 +386,23 @@ export const apiService = {
     });
 
     return newOS;
+  },
+
+  async updateServiceOrder(order: ServiceOrder, changes: Partial<ServiceOrder>): Promise<ServiceOrder> {
+    const { data, error } = await supabase.from('service_orders').update({
+      technician_id:changes.technicianId ?? order.technicianId ?? null, service_type:changes.serviceType ?? order.serviceType,
+      equipment_name:changes.equipmentName ?? order.equipmentName, serial_number:changes.serialNumber ?? order.serialNumber ?? null,
+      diagnostic:changes.diagnostic ?? order.diagnostic ?? null, parts_replaced:changes.partsReplaced ?? order.partsReplaced ?? null,
+      estimated_cost:changes.estimatedCost ?? order.estimatedCost, status:changes.status ?? order.status,
+      completed_at:(changes.status ?? order.status)==='COMPLETED' ? new Date().toISOString() : null
+    }).eq('id',order.id).select().single();
+    if(error || !data) throw new Error(`Não foi possível editar a OS: ${error?.message || ''}`);
+    return {...order,...changes,id:data.id,openedAt:data.opened_at,closedAt:data.completed_at || undefined};
+  },
+
+  async deleteServiceOrder(order: ServiceOrder, reason: string): Promise<void> {
+    const { error } = await supabase.rpc('delete_service_order_controlled',{p_os_id:order.id,p_reason:reason});
+    if(error) throw new Error(`Não foi possível excluir a OS: ${error.message}`);
   },
 
   // --- USER MANAGEMENT ---
