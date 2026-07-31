@@ -1,3 +1,4 @@
+
 import { 
   Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage
 } from '../types';
@@ -394,7 +395,11 @@ export const apiService = {
   async createUser(userData: Omit<UserProfile, 'id'>): Promise<UserProfile> {
     if (isSupabaseConfigured) {
       const { data, error } = await supabase.functions.invoke('invite-user', { body: userData });
-      if (error || !data?.profile) throw new Error(error?.message || data?.error || 'Não foi possível convidar o usuário.');
+      if (error || !data?.profile) {
+        const { data: existing } = await supabase.from('profiles').select('*').ilike('email', userData.email.trim()).maybeSingle();
+        if (existing) return profileFromDb(existing);
+        throw new Error(data?.error || error?.message || 'Não foi possível convidar o usuário.');
+      }
       return profileFromDb(data.profile);
     }
     const newUser: UserProfile = {
