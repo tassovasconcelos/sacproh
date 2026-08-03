@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { ArrowRight, BarChart3, Check, CreditCard, Headphones, LockKeyhole, ShieldCheck, Users } from 'lucide-react';
+import { startMercadoPagoCheckout } from '../../services/checkoutService';
 
 type Plan = {
   code: 'START' | 'PRO' | 'ENTERPRISE';
@@ -35,7 +36,7 @@ const plans: Plan[] = [
   },
 ];
 
-const requestCheckout = (plan: Plan) => {
+const requestCheckoutFallback = (plan: Plan) => {
   if (plan.checkout) {
     window.location.assign(plan.checkout);
     return;
@@ -46,6 +47,15 @@ const requestCheckout = (plan: Plan) => {
 };
 
 export function SaasTrialPortal() {
+  const requestCheckout = async (plan: Plan) => {
+    try {
+      await startMercadoPagoCheckout(plan.code);
+    } catch (error) {
+      console.error(error);
+      requestCheckoutFallback(plan);
+    }
+  };
+
   useEffect(() => {
     document.title = 'SAC 4.0 | Plataforma de Gestão de Atendimento';
     const description = document.querySelector('meta[name="description"]') || document.head.appendChild(document.createElement('meta'));
@@ -104,4 +114,3 @@ export function SaasTrialPortal() {
     <footer className="border-t border-white/10 px-5 py-8 text-center text-xs text-slate-500">© {new Date().getFullYear()} SAC 4.0 • Tecnologia e operação por GRIT NEWS</footer>
   </div>;
 }
-
