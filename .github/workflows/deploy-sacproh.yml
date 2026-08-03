@@ -60,6 +60,7 @@ jobs:
           set -euo pipefail
           app_url="https://apps.sacproh.gritnews.com.br/"
           html="$(curl --fail --silent --show-error --location --retry 20 --retry-delay 15 --retry-all-errors "$app_url")"
+          printf 'Resposta: %s\n' "$(printf '%s' "$html" | grep -oE '<title>[^<]*</title>' | head -n 1)"
           asset="$(printf '%s' "$html" | grep -oE 'src="\./assets/[^"]+\.js"' | head -n 1 | cut -d'"' -f2)"
           test -n "$asset"
           content_type="$(curl --fail --silent --show-error --head --location --retry 10 --retry-delay 10 --retry-all-errors "${app_url}${asset#./}" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | tail -n 1)"
