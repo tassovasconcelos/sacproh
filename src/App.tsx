@@ -24,8 +24,12 @@ import { apiService } from './services/apiService';
 import { supabase } from './lib/supabase';
 
 export default function App() {
-  // Check if current URL path includes /sacproh
+  const isDedicatedSacHost = typeof window !== 'undefined' &&
+    window.location.hostname.toLowerCase() === 'apps.sacproh.gritnews.com.br';
+
+  // O domínio dedicado deve abrir diretamente o SAC, mesmo usando a rota raiz (/).
   const isSacProhPath = typeof window !== 'undefined' && (
+    isDedicatedSacHost ||
     window.location.pathname.toLowerCase().includes('sacproh') || 
     window.location.hash.toLowerCase().includes('sacproh') ||
     window.location.search.toLowerCase().includes('sacproh')
@@ -37,12 +41,17 @@ export default function App() {
   // Sync mode with browser URL bar
   const navigateToApp = () => {
     if (typeof window !== 'undefined' && window.history.pushState) {
-      window.history.pushState({ path: '/sacproh' }, '', '/sacproh');
+      const appPath = isDedicatedSacHost ? '/' : '/sacproh';
+      window.history.pushState({ path: appPath }, '', appPath);
     }
     setAppMode('app');
   };
 
   const navigateToPortal = () => {
+    if (isDedicatedSacHost && typeof window !== 'undefined') {
+      window.location.assign('https://gritnews.com.br/');
+      return;
+    }
     if (typeof window !== 'undefined' && window.history.pushState) {
       window.history.pushState({ path: '/' }, '', '/');
     }
@@ -51,7 +60,7 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = () => {
-      const isSac = window.location.pathname.toLowerCase().includes('sacproh') || window.location.hash.toLowerCase().includes('sacproh');
+      const isSac = isDedicatedSacHost || window.location.pathname.toLowerCase().includes('sacproh') || window.location.hash.toLowerCase().includes('sacproh');
       setAppMode(isSac ? 'app' : 'portal');
     };
     window.addEventListener('popstate', handlePopState);
