@@ -37,15 +37,17 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Left Branding & Tenant Switcher */}
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-lg bg-[#E51B2B] flex items-center justify-center font-black text-white text-lg tracking-wider shadow-sm">
-            ✚
-          </div>
-          <div>
+          <img
+            src="/procirurgica-logo.png"
+            alt="Procirúrgica"
+            className="h-7 md:h-8 w-auto max-w-[180px] object-contain"
+          />
+          <div className="hidden sm:block border-l border-slate-600 pl-3">
             <div className="flex items-center space-x-2">
-              <span className="font-bold text-base tracking-wide text-white">PROCIRÚRGICA SAC</span>
+              <span className="font-bold text-sm tracking-wide text-white">SAC</span>
               <span className="text-[10px] bg-[#E51B2B] text-white px-1.5 py-0.5 rounded font-mono font-semibold">4.0</span>
             </div>
-            <p className="text-[11px] text-slate-300 font-medium">Cuidar da vida, todos os dias. · <strong className="text-white">{currentTenant.tradeName || currentTenant.name}</strong></p>
+            <p className="text-[10px] text-slate-300 font-medium">{currentTenant.tradeName || currentTenant.name}</p>
           </div>
         </div>
 
@@ -114,4 +116,3 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
-
