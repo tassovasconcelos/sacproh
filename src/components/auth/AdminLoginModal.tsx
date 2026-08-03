@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Key, Lock, Mail, ShieldAlert, X } from 'lucide-react';
+import { ArrowRight, Key, Mail, ShieldAlert, X } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import { UserProfile } from '../../types';
 
@@ -140,9 +140,10 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-[#0B2343] text-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-700 overflow-hidden text-xs">
         <div className="bg-[#071325] p-5 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="p-2 bg-[#FF8500]/20 text-[#FF8500] rounded-lg"><Lock className="w-5 h-5" /></div>
+          <div className="flex items-center space-x-3">
+            <img src="/procirurgica-icon-192.png" alt="" aria-hidden="true" className="w-10 h-10 object-contain" />
             <div>
+              <img src="/procirurgica-logo.png" alt="Procirúrgica" className="h-5 w-auto mb-1.5" />
               <h3 className="font-extrabold text-sm text-white">Área Restrita ADM</h3>
               <p className="text-[11px] text-slate-400">Autenticação segura pelo Supabase</p>
             </div>
@@ -213,4 +214,3 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
     </div>
   );
 };
-
