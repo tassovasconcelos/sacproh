@@ -1,7 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 Deno.serve(async (req) => {
-  const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type'};
+  const origin=req.headers.get('Origin') || '';
+  const allowedOrigins=new Set(['https://gritnews.com.br','https://www.gritnews.com.br','https://apps.sacproh.gritnews.com.br']);
+  const cors = {'Access-Control-Allow-Origin':allowedOrigins.has(origin)?origin:'https://apps.sacproh.gritnews.com.br','Vary':'Origin','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type'};
   if (req.method === 'OPTIONS') return new Response('ok',{headers:cors});
   try {
     const url=Deno.env.get('SUPABASE_URL')!, anon=Deno.env.get('SUPABASE_ANON_KEY')!, service=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -15,7 +17,7 @@ Deno.serve(async (req) => {
     const body=await req.json();
     const email=String(body.email || '').trim().toLowerCase();
     if(!email || !body.fullName || !body.roleCode) throw new Error('Nome, e-mail e perfil são obrigatórios.');
-    const redirectTo='https://gritnews.com.br/sacproh/';
+    const redirectTo=Deno.env.get('APP_URL') || 'https://apps.sacproh.gritnews.com.br/';
     let userId='';
     let invitationSent=false;
     const {data:listed,error:listError}=await admin.auth.admin.listUsers({page:1,perPage:1000});
@@ -39,3 +41,4 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({error:error instanceof Error?error.message:'Erro no convite'}),{status:400,headers:{...cors,'Content-Type':'application/json'}});
   }
 });
+
