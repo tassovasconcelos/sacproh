@@ -1,0 +1,48 @@
+name: Publicar portal comercial SAC Trial
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sactrial-hostinger-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v6
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+      - name: Validar TypeScript
+        run: npm run lint
+      - name: Compilar portal comercial
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_CHECKOUT_START_URL: ${{ secrets.VITE_CHECKOUT_START_URL }}
+          VITE_CHECKOUT_PRO_URL: ${{ secrets.VITE_CHECKOUT_PRO_URL }}
+          VITE_CHECKOUT_ENTERPRISE_URL: ${{ secrets.VITE_CHECKOUT_ENTERPRISE_URL }}
+        run: npm run build:web
+      - name: Publicar no subdomínio Hostinger por FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME_TRIAL }}
+          password: ${{ secrets.FTP_PASSWORD_TRIAL }}
+          protocol: ftps
+          port: 21
+          local-dir: ./dist/
+          server-dir: ${{ secrets.FTP_SERVER_DIR_TRIAL }}
+          dangerous-clean-slate: false
+
