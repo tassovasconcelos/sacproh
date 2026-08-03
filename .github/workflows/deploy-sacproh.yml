@@ -23,7 +23,8 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: pnpm
 
       - name: Configurar pnpm
         uses: pnpm/action-setup@v4
@@ -32,7 +33,7 @@ jobs:
           run_install: false
 
       - name: Instalar dependências
-        run: npm install --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
 
       - name: Validar TypeScript
         run: npm run lint
@@ -51,5 +52,17 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: dist/
           server-dir: /sacproh/
+          state-name: .ftp-deploy-sync-state-v2.json
           dangerous-clean-slate: false
+
+      - name: Verificar aplicação publicada
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_url="https://gritnews.com.br/sacproh/"
+          html="$(curl --fail --silent --show-error --location --retry 3 "$app_url")"
+          asset="$(printf '%s' "$html" | grep -oE 'src="\./assets/[^"]+\.js"' | head -n 1 | cut -d'"' -f2)"
+          test -n "$asset"
+          content_type="$(curl --fail --silent --show-error --head --location --retry 3 "${app_url}${asset#./}" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | tail -n 1)"
+          [[ "$content_type" == *javascript* ]]
 
