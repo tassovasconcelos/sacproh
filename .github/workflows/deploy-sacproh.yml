@@ -43,22 +43,22 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build:web
 
-      - name: Publicar em gritnews.com.br/sacproh
+      - name: Publicar em apps.sacproh.gritnews.com.br
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: dist/
-          server-dir: /sacproh/
-          state-name: .ftp-deploy-sync-state-v2.json
+          server-dir: /
+          state-name: .ftp-deploy-sync-state-apps-v1.json
           dangerous-clean-slate: false
 
       - name: Verificar aplicação publicada
         shell: bash
         run: |
           set -euo pipefail
-          app_url="https://gritnews.com.br/sacproh/"
+          app_url="https://apps.sacproh.gritnews.com.br/"
           html="$(curl --fail --silent --show-error --location --retry 3 "$app_url")"
           asset="$(printf '%s' "$html" | grep -oE 'src="\./assets/[^"]+\.js"' | head -n 1 | cut -d'"' -f2)"
           test -n "$asset"
