@@ -3,7 +3,7 @@ import {
   ArrowLeft, Clock, AlertTriangle, ShieldCheck, CheckCircle2, MessageSquare, 
   Paperclip, Wrench, Truck, Sparkles, DollarSign, Award, History, FileText, Send, Building, User, Package, Plus, Edit3, Trash2, X
 } from 'lucide-react';
-import { Ticket, TicketStatus, UserRole, UserProfile, ServiceOrder, TicketQualificationStage } from '../../types';
+import { Ticket, TicketStatus, UserRole, UserProfile, ServiceOrder, TicketQualificationStage, TechnicalCase } from '../../types';
 import { apiService } from '../../services/apiService';
 import { DispatchTicketModal } from './DispatchTicketModal';
 import { NewServiceOrderModal } from '../technical/NewServiceOrderModal';
@@ -52,10 +52,13 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
   const [qualificationNotes, setQualificationNotes] = useState(ticket.qualificationNotes || '');
   const [qualificationMessage, setQualificationMessage] = useState('');
   const [attachments, setAttachments] = useState<Array<{id:string;fileName:string;fileType:string;fileSize:number;url:string}>>([]);
+  const [technicalCases, setTechnicalCases] = useState<TechnicalCase[]>([]);
+  const [technicalError, setTechnicalError] = useState('');
   const [newAttachments, setNewAttachments] = useState<File[]>([]);
   const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
 
   useEffect(() => { apiService.getTicketAttachments(ticket.id).then(setAttachments); }, [ticket.id]);
+  useEffect(() => { apiService.getTechnicalCases(ticket.id).then(setTechnicalCases).catch(error => setTechnicalError(error.message)); }, [ticket.id]);
 
   const saveQualification = async () => {
     await apiService.updateTicketQualification(ticket.id, qualificationStage, qualificationNotes, currentUser);
@@ -422,15 +425,25 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
 
           {/* TAB 7: ASSISTÊNCIA TÉCNICA */}
           {activeTab === 'technical' && (
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm text-[#10233F]">Subprotocolo de Assistência Técnica: SAC.2607.001-AT01</h4>
-                <span className="bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded text-[11px]">Em Análise de Bancada</span>
-              </div>
-              <p><strong>Técnico Responsável:</strong> Eng. Carlos Eduardo</p>
-              <p><strong>Laudo Diagnóstico:</strong> Constatado erro E-04 proveniente de oxidação nos pinos do conector da caneta monopolar. Necessária troca da placa da interface frontal.</p>
-              <p><strong>Peças Substituídas:</strong> Placa Interface Frontal HF-400W (SKU: PLC-FR-WEM)</p>
-              <p><strong>Custo Técnico Estimado:</strong> R$ 850,00</p>
+            <div className="space-y-3">
+              {technicalError && <p className="p-3 rounded-lg bg-red-50 text-red-700">{technicalError}</p>}
+              {technicalCases.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-slate-500">Nenhum subprotocolo de assistência técnica vinculado a este SAC.</div>
+              ) : technicalCases.map(technicalCase => (
+                <div key={technicalCase.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="font-bold text-sm text-[#10233F]">Subprotocolo de Assistência Técnica: {technicalCase.subprotocol}</h4>
+                    <div className="flex items-center gap-2">
+                      <span className="bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded text-[11px]">{technicalCase.status}</span>
+                      {['SUPERADMIN','ADMIN_EMPRESA','RESPONSAVEL_TECNICA','TECNICO'].includes(userRole) && <button type="button" onClick={async()=>{const reason=window.prompt(`Informe o motivo para excluir ${technicalCase.subprotocol}:`);if(!reason)return;try{setTechnicalError('');await apiService.deleteTechnicalCase(technicalCase,reason,currentUser);setTechnicalCases(current=>current.filter(item=>item.id!==technicalCase.id));}catch(error){setTechnicalError(error instanceof Error?error.message:'Falha ao excluir subprotocolo');}}} className="p-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100" title="Excluir subprotocolo"><Trash2 className="w-4 h-4"/></button>}
+                    </div>
+                  </div>
+                  <p><strong>Técnico Responsável:</strong> {technicalCase.technicianName || 'Não atribuído'}</p>
+                  <p><strong>Laudo Diagnóstico:</strong> {technicalCase.diagnosticReport || 'Não informado'}</p>
+                  <p><strong>Peças Substituídas:</strong> {technicalCase.replacedParts || 'Nenhuma informada'}</p>
+                  <p><strong>Custo Técnico Estimado:</strong> R$ {technicalCase.cost.toFixed(2)}</p>
+                </div>
+              ))}
             </div>
           )}
 
