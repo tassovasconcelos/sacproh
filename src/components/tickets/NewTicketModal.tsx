@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { 
   X, Plus, Trash2, Sparkles, AlertTriangle, ShieldCheck, Upload, FileText, CheckCircle 
 } from 'lucide-react';
-import { Customer, Product, Ticket, TicketPriority } from '../../types';
+import { Carrier, Customer, Product, Ticket, TicketPriority, UserProfile } from '../../types';
 import { apiService } from '../../services/apiService';
 
 interface NewTicketModalProps {
   customers: Customer[];
   products: Product[];
   currentTenantId: string;
+  currentUser: UserProfile;
+  carriers: Carrier[];
   onClose: () => void;
   onTicketCreated: (ticket: Ticket) => void;
 }
@@ -17,6 +19,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   customers,
   products,
   currentTenantId,
+  currentUser,
+  carriers,
   onClose,
   onTicketCreated
 }) => {
@@ -26,9 +30,22 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
   // Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customers[0]?.id || '');
-  const [sellerName, setSellerName] = useState<string>('Fernando Costa');
-  const [invoiceNumber, setInvoiceNumber] = useState<string>('NF-88902');
-  const [salesChannel, setSalesChannel] = useState<string>('Venda Direta Hospitalar');
+  const [customerMode, setCustomerMode] = useState<'existing' | 'new'>(customers.length ? 'existing' : 'new');
+  const [newCustomer, setNewCustomer] = useState({
+    type: 'PF' as Customer['type'], name: '', tradeName: '', document: '', email: '',
+    phone: '', whatsapp: '', city: '', state: '', address: '', lgpdConsent: false
+  });
+  const [sellerName, setSellerName] = useState<string>('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+  const [purchaseDate, setPurchaseDate] = useState<string>('');
+  const [deliveryDate, setDeliveryDate] = useState<string>('');
+  const [salesChannel, setSalesChannel] = useState<string>('NAO_INFORMADO');
+  const [selectedCarrierId, setSelectedCarrierId] = useState('');
+  const [showNewCarrier, setShowNewCarrier] = useState(false);
+  const [newCarrier, setNewCarrier] = useState({ legalName:'', tradeName:'', document:'', contactName:'', email:'', phone:'' });
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   // Multi-Product Items State
   const [items, setItems] = useState<{
@@ -95,19 +112,45 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const customer = customers.find(c => c.id === selectedCustomerId) || customers[0];
+    setSubmitError('');
+    setIsSubmitting(true);
+    try {
+      let customer = customers.find(c => c.id === selectedCustomerId);
+      if (customerMode === 'new') {
+        if (!newCustomer.name.trim() || !newCustomer.document.trim()) {
+          throw new Error('Informe o nome e o CPF/CNPJ do cliente.');
+        }
+        customer = await apiService.createCustomer({
+          ...newCustomer,
+          name: newCustomer.name.trim(),
+          document: newCustomer.document.trim(),
+          tenantId: currentTenantId
+        });
+      }
+      if (!customer) throw new Error('Selecione ou cadastre um cliente.');
+      let carrier = carriers.find(item => item.id === selectedCarrierId);
+      if (showNewCarrier && newCarrier.legalName.trim()) {
+        carrier = await apiService.createCarrier({ ...newCarrier, legalName:newCarrier.legalName.trim(),
+          tenantId:currentTenantId, qualificationStatus:'PENDING', isActive:true });
+      }
 
-    const newTicketData = {
+      const newTicketData = {
       tenantId: currentTenantId,
+      unitId: currentUser.unitId,
       customerId: customer.id,
       customerName: customer.name,
       customerDocument: customer.document,
       sellerName,
       invoiceNumber,
+      purchaseDate: purchaseDate || undefined,
+      deliveryDate: deliveryDate || undefined,
       salesChannel,
+      carrierId: carrier?.id,
+      carrierName: carrier?.tradeName || carrier?.legalName,
       description,
       category,
       subcategory,
+      qualificationStage: 'REGISTRATION' as const,
       priority,
       urgency: priority,
       impact: priority,
@@ -118,9 +161,9 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       readyForCollection,
       status: 'TRIAGE' as const,
       assignedArea: 'SAC & Qualidade',
-      createdBy: 'u001',
-      createdByName: 'Atendente SAC Procirúrgica',
-      attachmentsCount: 1,
+      createdBy: currentUser.id,
+      createdByName: currentUser.fullName,
+      attachmentsCount: 0,
       items: items.map((it, idx) => ({
         id: 'ti-new-' + idx,
         ticketId: '',
@@ -130,10 +173,16 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         serialNumber: it.serialNumber,
         lotNumber: it.lotNumber
       }))
-    };
+      };
 
-    const created = await apiService.createTicket(newTicketData);
-    onTicketCreated(created);
+      const created = await apiService.createTicket(newTicketData);
+      const uploadedCount = attachments.length ? await apiService.uploadTicketAttachments(created, attachments, currentUser) : 0;
+      onTicketCreated({ ...created, attachmentsCount: uploadedCount });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Não foi possível abrir o chamado.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -178,24 +227,84 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           {/* STEP 1: CLIENTE E COMERCIAL */}
           {step === 1 && (
             <div className="space-y-4">
-              <h3 className="font-bold text-sm text-[#10233F]">Dados do Cliente & Venda Comercial</h3>
-              
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">Selecione o Cliente / Unidade Médica *</label>
-                <select
-                  value={selectedCustomerId}
-                  onChange={(e) => setSelectedCustomerId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:border-[#145EDB] outline-none"
-                >
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.document}) - {c.city}/{c.state}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-[#10233F]">Cliente e origem da venda</h3>
+                <div className="flex rounded-lg border border-slate-300 overflow-hidden">
+                  <button type="button" onClick={() => setCustomerMode('existing')}
+                    className={`px-3 py-1.5 font-bold ${customerMode === 'existing' ? 'bg-[#145EDB] text-white' : 'bg-white text-slate-600'}`}>
+                    Cliente cadastrado
+                  </button>
+                  <button type="button" onClick={() => setCustomerMode('new')}
+                    className={`px-3 py-1.5 font-bold ${customerMode === 'new' ? 'bg-[#145EDB] text-white' : 'bg-white text-slate-600'}`}>
+                    + Novo cliente
+                  </button>
+                </div>
               </div>
 
+              {customerMode === 'existing' ? (
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Cliente *</label>
+                  <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} required
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:border-[#145EDB] outline-none">
+                    <option value="">Selecione...</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.document}){c.city ? ` - ${c.city}/${c.state || ''}` : ''}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <div className="p-4 bg-blue-50/60 border border-blue-200 rounded-xl space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <label className="sm:col-span-1 font-semibold text-slate-700">Tipo *
+                      <select value={newCustomer.type} onChange={e => setNewCustomer({...newCustomer, type: e.target.value as Customer['type']})}
+                        className="mt-1 w-full bg-white border border-slate-300 rounded-lg p-2">
+                        <option value="PF">Pessoa física</option><option value="PJ">Empresa</option>
+                        <option value="CLINIC">Clínica</option><option value="HOSPITAL">Hospital</option>
+                      </select>
+                    </label>
+                    <label className="sm:col-span-2 font-semibold text-slate-700">Nome / Razão social *
+                      <input value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer,name:e.target.value})} required
+                        className="mt-1 w-full bg-white border border-slate-300 rounded-lg p-2" />
+                    </label>
+                    <label className="font-semibold text-slate-700">CPF / CNPJ *
+                      <input value={newCustomer.document} onChange={e => setNewCustomer({...newCustomer,document:e.target.value})} required
+                        className="mt-1 w-full bg-white border border-slate-300 rounded-lg p-2" />
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <label className="font-semibold text-slate-700">WhatsApp
+                      <input value={newCustomer.whatsapp} onChange={e => setNewCustomer({...newCustomer,whatsapp:e.target.value})} className="mt-1 w-full bg-white border border-slate-300 rounded-lg p-2" />
+                    </label>
+                    <label className="font-semibold text-slate-700">E-mail
+                      <input type="email" value={newCustomer.email} onChange={e => setNewCustomer({...newCustomer,email:e.target.value})} className="mt-1 w-full bg-white border border-slate-300 rounded-lg p-2" />
+                    </label>
+                    <label className="font-semibold text-slate-700">Cidade
+                      <input value={newCustomer.city} onChange={e => setNewCustomer({...newCustomer,city:e.target.value})} className="mt-1 w-full bg-white border border-slate-300 rounded-lg p-2" />
+                    </label>
+                    <label className="font-semibold text-slate-700">UF
+                      <input maxLength={2} value={newCustomer.state} onChange={e => setNewCustomer({...newCustomer,state:e.target.value.toUpperCase()})} className="mt-1 w-full bg-white border border-slate-300 rounded-lg p-2 uppercase" />
+                    </label>
+                  </div>
+                  <label className="flex items-center gap-2 text-slate-700"><input type="checkbox" checked={newCustomer.lgpdConsent} onChange={e => setNewCustomer({...newCustomer,lgpdConsent:e.target.checked})} /> Consentimento para contato e tratamento dos dados (LGPD)</label>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Canal de venda *</label>
+                  <select value={salesChannel} onChange={(e) => setSalesChannel(e.target.value)} required
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:border-[#145EDB] outline-none">
+                    <option value="NAO_INFORMADO">Não informado</option>
+                    <option value="LOJA_FISICA">Loja física</option><option value="E_COMMERCE">E-commerce próprio</option>
+                    <option value="MARKETPLACE">Marketplace</option><option value="REPRESENTANTE">Representante comercial</option>
+                    <option value="VENDA_DIRETA">Venda direta</option><option value="DISTRIBUIDOR_REVENDEDOR">Distribuidor / revendedor</option>
+                    <option value="LICITACAO">Licitação / contrato público</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">{salesChannel === 'LOJA_FISICA' ? 'Nome da loja *' : 'Loja / parceiro / vendedor'}</label>
+                  <input type="text" value={sellerName} onChange={(e) => setSellerName(e.target.value)} required={salesChannel === 'LOJA_FISICA'}
+                    placeholder={salesChannel === 'LOJA_FISICA' ? 'Informe a loja onde comprou' : 'Identificação da origem'}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:border-[#145EDB] outline-none" />
+                </div>
                 <div>
                   <label className="block text-slate-700 font-semibold mb-1">Nota Fiscal</label>
                   <input
@@ -205,28 +314,34 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-mono text-slate-900 focus:border-[#145EDB] outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Vendedor / Representante</label>
-                  <input
-                    type="text"
-                    value={sellerName}
-                    onChange={(e) => setSellerName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:border-[#145EDB] outline-none"
-                  />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="font-semibold text-slate-700">Data da compra
+                  <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg p-2" />
+                </label>
+                <label className="font-semibold text-slate-700">Data de entrega
+                  <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg p-2" />
+                </label>
+              </div>
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex justify-between items-center"><strong>Transportadora vinculada</strong>
+                  <button type="button" onClick={() => setShowNewCarrier(!showNewCarrier)} className="text-[#145EDB] font-bold">{showNewCarrier ? 'Selecionar cadastrada' : '+ Cadastrar transportadora'}</button>
                 </div>
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Canal de Venda</label>
-                  <select
-                    value={salesChannel}
-                    onChange={(e) => setSalesChannel(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-slate-900 focus:border-[#145EDB] outline-none"
-                  >
-                    <option value="Venda Direta Hospitalar">Venda Direta Hospitalar</option>
-                    <option value="Loja Física Aldeota">Loja Física Aldeota</option>
-                    <option value="Loja Física Recife">Loja Física Recife</option>
-                    <option value="E-commerce B2B">E-commerce B2B</option>
+                {!showNewCarrier ? (
+                  <select value={selectedCarrierId} onChange={e=>setSelectedCarrierId(e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg p-2">
+                    <option value="">Sem transportadora definida</option>
+                    {carriers.map(carrier => <option key={carrier.id} value={carrier.id}>{carrier.tradeName || carrier.legalName} — {carrier.qualificationStatus}</option>)}
                   </select>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <input placeholder="Razão social *" value={newCarrier.legalName} onChange={e=>setNewCarrier({...newCarrier,legalName:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input placeholder="Nome fantasia" value={newCarrier.tradeName} onChange={e=>setNewCarrier({...newCarrier,tradeName:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input placeholder="CNPJ" value={newCarrier.document} onChange={e=>setNewCarrier({...newCarrier,document:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input placeholder="Contato" value={newCarrier.contactName} onChange={e=>setNewCarrier({...newCarrier,contactName:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input type="email" placeholder="E-mail" value={newCarrier.email} onChange={e=>setNewCarrier({...newCarrier,email:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                    <input placeholder="Telefone" value={newCarrier.phone} onChange={e=>setNewCarrier({...newCarrier,phone:e.target.value})} className="bg-white border border-slate-300 rounded-lg p-2" />
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -405,6 +520,21 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                 </div>
               </div>
 
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+                <label className="font-bold text-[#10233F] flex items-center gap-2"><Upload className="w-4 h-4" /> Imagens e vídeos da ocorrência</label>
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+                  onChange={e=>setAttachments(previous => {
+                    const selected = Array.from(e.target.files || []);
+                    const unique = [...previous, ...selected].filter((file, index, all) =>
+                      all.findIndex(candidate => candidate.name === file.name && candidate.size === file.size && candidate.lastModified === file.lastModified) === index
+                    );
+                    return unique.slice(0, 20);
+                  })}
+                  className="w-full bg-white border border-blue-200 rounded-lg p-2" />
+                <p className="text-[11px] text-slate-500">Selecione em mais de uma etapa, se desejar. Até 20 arquivos, 50 MB cada: JPG, PNG, WEBP, MP4, WEBM e MOV.</p>
+                {attachments.length > 0 && <p className="font-semibold text-blue-800">{attachments.length} arquivo(s) selecionado(s): {attachments.map(f=>f.name).join(', ')}</p>}
+              </div>
+
               {/* Regulatory Risk Checkboxes (ANVISA/LGPD) */}
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-2">
                 <span className="font-bold text-amber-900 flex items-center space-x-1.5">
@@ -458,6 +588,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           )}
 
           {/* Modal Footer Controls */}
+          {submitError && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 font-semibold">{submitError}</div>}
           <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
             {step > 1 ? (
               <button
@@ -480,10 +611,11 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             ) : (
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-[#FF8500] hover:bg-[#e07500] font-bold text-white rounded-lg shadow-md flex items-center space-x-2"
+                disabled={isSubmitting}
+                className="px-6 py-2.5 bg-[#FF8500] hover:bg-[#e07500] disabled:opacity-60 font-bold text-white rounded-lg shadow-md flex items-center space-x-2"
               >
                 <CheckCircle className="w-4 h-4" />
-                <span>Confirmar & Gerar Protocolo SAC</span>
+                <span>{isSubmitting ? 'Salvando chamado...' : 'Confirmar & Gerar Protocolo SAC'}</span>
               </button>
             )}
           </div>

@@ -1,21 +1,18 @@
 import { 
-  Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder 
+  Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage
 } from '../types';
-import { 
-  mockTickets, mockCustomers, mockProducts, mockQualityPlans, mockTechnicalCases, mockLogisticsCases, mockAuditLogs, mockUsers, mockServiceOrders 
-} from '../lib/mockData';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
-// In-Memory store for preview mode when Supabase is not connected
-let localTickets = [...mockTickets];
-let localCustomers = [...mockCustomers];
-let localProducts = [...mockProducts];
-let localQualityPlans = [...mockQualityPlans];
-let localTechnicalCases = [...mockTechnicalCases];
-let localLogisticsCases = [...mockLogisticsCases];
-let localAuditLogs = [...mockAuditLogs];
-let localUsers = [...mockUsers];
-let localServiceOrders = [...mockServiceOrders];
+// O modo sem banco inicia vazio para nunca misturar registros demonstrativos com dados comerciais.
+let localTickets: Ticket[] = [];
+let localCustomers: Customer[] = [];
+let localProducts: Product[] = [];
+let localQualityPlans: QualityActionPlan[] = [];
+let localTechnicalCases: TechnicalCase[] = [];
+let localLogisticsCases: LogisticsCase[] = [];
+let localAuditLogs: AuditLog[] = [];
+let localUsers: UserProfile[] = [];
+let localServiceOrders: ServiceOrder[] = [];
 
 export interface HistoricalImportTicket {
   protocol: string;
@@ -35,8 +32,24 @@ const profileFromDb = (row: any): UserProfile => ({
   fullName: row.full_name, email: row.email, phone: row.phone || undefined,
   jobTitle: row.job_title || undefined, department: row.department || undefined,
   employeeCode: row.employee_code || undefined, managerName: row.manager_name || undefined,
-  notes: row.notes || undefined, roleCode: row.role_code, avatarUrl: row.avatar_url || undefined,
+  notes: row.notes || undefined, roleCode: row.role_code, accessScope: row.access_scope || (row.role_code === 'GERENTE_LOJA' ? 'OWN' : 'TENANT'), avatarUrl: row.avatar_url || undefined,
   isActive: row.is_active, lastAccessAt: row.last_access_at || undefined
+});
+
+const customerFromDb = (row: any): Customer => ({
+  id: row.id, tenantId: row.tenant_id, type: row.type, name: row.name,
+  tradeName: row.trade_name || undefined, document: row.document,
+  email: row.email || undefined, phone: row.phone || undefined,
+  whatsapp: row.whatsapp || undefined, city: row.city || undefined,
+  state: row.state || undefined, address: row.address || undefined,
+  lgpdConsent: Boolean(row.lgpd_consent)
+});
+
+const productFromDb = (row: any): Product => ({
+  id: row.id, tenantId: row.tenant_id, codeSku: row.code_sku, name: row.name,
+  familyId: row.family_id || undefined, model: row.model || undefined,
+  anvisaRegister: row.anvisa_register || undefined,
+  supplierName: row.supplier_name || undefined, countryOrigin: row.country_origin || undefined
 });
 
 const ticketFromDb = (row: any): Ticket => ({
@@ -45,11 +58,14 @@ const ticketFromDb = (row: any): Ticket => ({
   customerDocument: row.customer?.document || row.customer_document || '', sellerName: row.seller_name || undefined,
   invoiceNumber: row.invoice_number || undefined, purchaseDate: row.purchase_date || undefined,
   deliveryDate: row.delivery_date || undefined, salesChannel: row.sales_channel || undefined,
+  carrierId: row.carrier_id || undefined, carrierName: row.carrier?.trade_name || row.carrier?.legal_name || undefined,
   description: row.description, category: row.category, subcategory: row.subcategory || undefined,
-  classification: row.classification || undefined, priority: row.priority, urgency: row.urgency,
+  classification: row.classification || undefined, qualificationStage: row.qualification_stage || 'REGISTRATION',
+  qualificationNotes: row.qualification_notes || undefined, priority: row.priority, urgency: row.urgency,
   impact: row.impact, initialProcedency: row.initial_procedency, userRiskFlag: row.user_risk_flag,
   adverseEventFlag: row.adverse_event_flag, damageFlag: row.damage_flag, readyForCollection: row.ready_for_collection,
-  status: row.status, assignedTo: row.assigned_to || undefined, assignedArea: row.assigned_area || undefined,
+  status: row.status, assignedTo: row.assigned_to || undefined,
+  assignedToName: row.assigned_profile?.full_name || undefined, assignedArea: row.assigned_area || undefined,
   slaDueAt: row.sla_due_at || undefined, firstResponseAt: row.first_response_at || undefined,
   resolvedAt: row.resolved_at || undefined, closedAt: row.closed_at || undefined,
   finalOpinion: row.final_opinion || undefined, finalProcedency: row.final_procedency || undefined,
@@ -64,15 +80,14 @@ export const apiService = {
   // --- TICKETS ---
   async getTickets(filters?: DashboardFilters): Promise<Ticket[]> {
     if (isSupabaseConfigured) {
-      let query = supabase.from('tickets').select('*, customer:customers(name,document), items:ticket_items(*)');
+      let query = supabase.from('tickets').select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), assigned_profile:profiles!tickets_assigned_to_fkey(full_name), items:ticket_items(*)');
       if (filters?.tenantId) query = query.eq('tenant_id', filters.tenantId);
       if (filters?.unitId) query = query.eq('unit_id', filters.unitId);
       if (filters?.status) query = query.eq('status', filters.status);
       if (filters?.priority) query = query.eq('priority', filters.priority);
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) {
-        console.error('Supabase fetch tickets error:', error);
-        return localTickets;
+        throw new Error(`Não foi possível carregar os chamados: ${error.message}`);
       }
       return (data || []).map(ticketFromDb);
     }
@@ -92,16 +107,15 @@ export const apiService = {
         .select('*, items:ticket_items(*)')
         .eq('id', id)
         .single();
-      if (error) return localTickets.find(t => t.id === id) || null;
-      return data as unknown as Ticket;
+      if (error) throw new Error(`Não foi possível carregar o chamado: ${error.message}`);
+      return ticketFromDb(data);
     }
     return localTickets.find(t => t.id === id) || null;
   },
 
   async createTicket(ticketData: Omit<Ticket, 'id' | 'protocol' | 'createdAt' | 'updatedAt'>): Promise<Ticket> {
-    const ym = new Date().toISOString().slice(2, 4) + (new Date().getMonth() + 1).toString().padStart(2, '0');
-    const seq = (localTickets.length + 1).toString().padStart(3, '0');
-    const protocol = `SAC.${ym}.${seq}`;
+    const ym = new Date().toISOString().slice(2, 7).replace('-', '');
+    let protocol = `SAC.${ym}.${Date.now().toString().slice(-6)}`;
     
     const newTicket: Ticket = {
       ...ticketData,
@@ -115,26 +129,61 @@ export const apiService = {
 
     if (isSupabaseConfigured) {
       try {
+        const { data: generatedProtocol } = await supabase.rpc('generate_ticket_protocol', { p_tenant_id: ticketData.tenantId });
+        if (generatedProtocol) protocol = generatedProtocol;
         const { data, error } = await supabase.from('tickets').insert([{
           tenant_id: ticketData.tenantId,
           protocol,
           unit_id: ticketData.unitId,
           customer_id: ticketData.customerId,
+          seller_name: ticketData.sellerName || null,
+          invoice_number: ticketData.invoiceNumber || null,
+          purchase_date: ticketData.purchaseDate || null,
+          delivery_date: ticketData.deliveryDate || null,
+          sales_channel: ticketData.salesChannel || null,
+          carrier_id: ticketData.carrierId || null,
           description: ticketData.description,
           category: ticketData.category,
           subcategory: ticketData.subcategory,
+          qualification_stage: ticketData.qualificationStage || 'REGISTRATION',
+          qualification_notes: ticketData.qualificationNotes || null,
           priority: ticketData.priority,
           urgency: ticketData.urgency,
           impact: ticketData.impact,
+          initial_procedency: ticketData.initialProcedency,
           status: ticketData.status,
+          assigned_area: ticketData.assignedArea || null,
+          created_by: ticketData.createdBy,
           user_risk_flag: ticketData.userRiskFlag,
           adverse_event_flag: ticketData.adverseEventFlag,
           damage_flag: ticketData.damageFlag,
           ready_for_collection: ticketData.readyForCollection
-        }]).select().single();
-        if (!error && data) return data as unknown as Ticket;
+        }]).select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)').single();
+        if (error || !data) throw error || new Error('Chamado não retornado pelo banco');
+
+        if (ticketData.items.length) {
+          const { error: itemError } = await supabase.from('ticket_items').insert(ticketData.items.map(item => ({
+            ticket_id: data.id,
+            product_id: item.productId || null,
+            product_name: item.productName,
+            sku: item.sku || null,
+            quantity: item.quantity,
+            serial_number: item.serialNumber || null,
+            lot_number: item.lotNumber || null,
+            expiration_date: item.expirationDate || null,
+            anvisa_register: item.anvisaRegister || null
+          })));
+          if (itemError) throw itemError;
+        }
+
+        const { data: complete } = await supabase
+          .from('tickets')
+          .select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)')
+          .eq('id', data.id).single();
+        return ticketFromDb(complete || data);
       } catch (err) {
         console.error('Failed creating ticket in Supabase:', err);
+        throw err;
       }
     }
 
@@ -156,6 +205,35 @@ export const apiService = {
   },
 
   async updateTicketStatus(ticketId: string, newStatus: TicketStatus, notes: string, user: string): Promise<Ticket | null> {
+    if (isSupabaseConfigured) {
+      const allowed: Partial<Record<TicketStatus, TicketStatus[]>> = {
+        NEW: ['TRIAGE'],
+        TRIAGE: ['TECHNICAL_ANALYSIS', 'SENT_TO_TECHNICAL', 'SENT_TO_LOGISTICS'],
+        TECHNICAL_ANALYSIS: ['SENT_TO_LOGISTICS', 'WAITING_CUSTOMER', 'WAITING_SUPPLIER', 'CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT'],
+        SENT_TO_TECHNICAL: ['TECHNICAL_ANALYSIS', 'WAITING_CUSTOMER', 'WAITING_SUPPLIER', 'CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT'],
+        SENT_TO_LOGISTICS: ['TECHNICAL_ANALYSIS', 'WAITING_CUSTOMER', 'CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT'],
+        WAITING_CUSTOMER: ['TRIAGE', 'TECHNICAL_ANALYSIS', 'SENT_TO_LOGISTICS'],
+        WAITING_SUPPLIER: ['TECHNICAL_ANALYSIS', 'CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT']
+      };
+      const { data: current, error: fetchError } = await supabase.from('tickets').select('*').eq('id', ticketId).single();
+      if (fetchError || !current) throw new Error(`Chamado não encontrado: ${fetchError?.message || ''}`);
+      if (current.status !== newStatus && !(allowed[current.status as TicketStatus] || []).includes(newStatus)) {
+        throw new Error(`Transição de ${current.status} para ${newStatus} não é permitida.`);
+      }
+      const now = new Date().toISOString();
+      const closed = newStatus === 'CLOSED_PROCEDENT' || newStatus === 'CLOSED_NON_PROCEDENT';
+      const { data, error } = await supabase.from('tickets').update({
+        status: newStatus, updated_at: now, closed_at: closed ? now : null,
+        resolved_at: closed ? (current.resolved_at || now) : current.resolved_at
+      }).eq('id', ticketId).select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)').single();
+      if (error || !data) throw new Error(`Não foi possível alterar o status: ${error?.message || ''}`);
+      const { data: profile } = await supabase.from('profiles').select('full_name,email,tenant_id').eq('id', user).single();
+      await Promise.all([
+        supabase.from('ticket_status_history').insert({ ticket_id: ticketId, previous_status: current.status, new_status: newStatus, changed_by: user, changed_by_name: profile?.full_name || 'Usuário', notes }),
+        supabase.from('audit_logs').insert({ tenant_id: current.tenant_id, user_id: user, user_email: profile?.email || null, action: 'STATUS_CHANGED', entity: 'TICKET', entity_id: ticketId, details: { previous_status: current.status, new_status: newStatus, notes } })
+      ]);
+      return ticketFromDb(data);
+    }
     const ticket = localTickets.find(t => t.id === ticketId);
     if (!ticket) return null;
 
@@ -181,6 +259,25 @@ export const apiService = {
     return ticket;
   },
 
+  async updateTicket(ticket: Ticket, changes: Partial<Ticket>, user: UserProfile): Promise<Ticket> {
+    const { data, error } = await supabase.from('tickets').update({
+      description:changes.description ?? ticket.description, category:changes.category ?? ticket.category,
+      subcategory:changes.subcategory ?? ticket.subcategory ?? null, priority:changes.priority ?? ticket.priority,
+      urgency:changes.urgency ?? ticket.urgency, impact:changes.impact ?? ticket.impact,
+      invoice_number:changes.invoiceNumber ?? ticket.invoiceNumber ?? null, seller_name:changes.sellerName ?? ticket.sellerName ?? null,
+      sales_channel:changes.salesChannel ?? ticket.salesChannel ?? null, assigned_area:changes.assignedArea ?? ticket.assignedArea ?? null,
+      updated_at:new Date().toISOString()
+    }).eq('id',ticket.id).select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)').single();
+    if(error || !data) throw new Error(`Não foi possível editar o SAC: ${error?.message || ''}`);
+    await supabase.from('audit_logs').insert({tenant_id:ticket.tenantId,user_id:user.id,user_email:user.email,action:'TICKET_UPDATED',entity:'TICKET',entity_id:ticket.id,details:{protocol:ticket.protocol,fields:Object.keys(changes)}});
+    return ticketFromDb(data);
+  },
+
+  async deleteTicket(ticket: Ticket, reason: string): Promise<void> {
+    const { error } = await supabase.rpc('delete_ticket_controlled',{p_ticket_id:ticket.id,p_reason:reason});
+    if(error) throw new Error(`Não foi possível excluir o SAC: ${error.message}`);
+  },
+
   async dispatchTicket(
     ticketId: string, 
     assignedArea: string, 
@@ -189,6 +286,22 @@ export const apiService = {
     notes?: string, 
     userEmail?: string
   ): Promise<Ticket | null> {
+    if (isSupabaseConfigured) {
+      const { data: current, error: fetchError } = await supabase.from('tickets').select('*').eq('id', ticketId).single();
+      if (fetchError || !current) throw new Error(`Chamado não encontrado: ${fetchError?.message || ''}`);
+      const area = assignedArea.toLocaleLowerCase('pt-BR');
+      const nextStatus: TicketStatus = area.includes('técnica') || area.includes('tecnica') ? 'SENT_TO_TECHNICAL'
+        : area.includes('logística') || area.includes('logistica') ? 'SENT_TO_LOGISTICS' : current.status;
+      const { data, error } = await supabase.from('tickets').update({ assigned_area: assignedArea, assigned_to: assignedToId || null, status: nextStatus, updated_at: new Date().toISOString() })
+        .eq('id', ticketId).select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)').single();
+      if (error || !data) throw new Error(`Não foi possível encaminhar o chamado: ${error?.message || ''}`);
+      const { data: actor } = await supabase.auth.getUser();
+      await Promise.all([
+        current.status !== nextStatus ? supabase.from('ticket_status_history').insert({ ticket_id: ticketId, previous_status: current.status, new_status: nextStatus, changed_by: actor.user?.id || null, changed_by_name: userEmail || 'Usuário', notes }) : Promise.resolve(),
+        supabase.from('audit_logs').insert({ tenant_id: current.tenant_id, user_id: actor.user?.id || null, user_email: userEmail || actor.user?.email || null, action: 'TICKET_DISPATCHED', entity: 'TICKET', entity_id: ticketId, details: { assigned_area: assignedArea, assigned_to: assignedToId || null, assigned_to_name: assignedToName || null, notes: notes || null } })
+      ]);
+      return ticketFromDb(data);
+    }
     const ticket = localTickets.find(t => t.id === ticketId);
     if (!ticket) return null;
 
@@ -220,6 +333,11 @@ export const apiService = {
 
   // --- SERVICE ORDERS (ORDENS DE SERVIÇO - OS) ---
   async getServiceOrders(): Promise<ServiceOrder[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('service_orders').select('*, ticket:tickets(protocol,customer:customers(name)), technician:profiles(full_name)').order('opened_at', { ascending: false });
+      if (error) throw new Error(`Não foi possível carregar as ordens de serviço: ${error.message}`);
+      return (data || []).map((row:any) => ({ id:row.id, osNumber:row.os_number, ticketId:row.ticket_id, protocol:row.ticket?.protocol || '', customerName:row.ticket?.customer?.name || '', equipmentName:row.equipment_name, serialNumber:row.serial_number || undefined, technicianId:row.technician_id || '', technicianName:row.technician?.full_name || '', serviceType:row.service_type, urgency:'MEDIUM', diagnostic:row.diagnostic || '', partsReplaced:row.parts_replaced || undefined, estimatedCost:Number(row.estimated_cost || 0), status:row.status, openedAt:row.opened_at, closedAt:row.completed_at || undefined }));
+    }
     return localServiceOrders;
   },
 
@@ -234,6 +352,18 @@ export const apiService = {
       osNumber,
       openedAt: new Date().toISOString()
     };
+
+    if (isSupabaseConfigured) {
+      const { data: ticket, error: ticketError } = await supabase.from('tickets').select('tenant_id').eq('id', osData.ticketId).single();
+      if (ticketError || !ticket) throw new Error('Chamado da ordem de serviço não encontrado.');
+      const { data: generatedOS, error: sequenceError } = await supabase.rpc('generate_service_order_number',{p_tenant_id:ticket.tenant_id});
+      if(sequenceError) throw new Error(`Não foi possível gerar a sequência da OS: ${sequenceError.message}`);
+      const officialOSNumber=generatedOS || osNumber;
+      const { data, error } = await supabase.from('service_orders').insert({ tenant_id:ticket.tenant_id, ticket_id:osData.ticketId, os_number:officialOSNumber, technician_id:osData.technicianId || null, service_type:osData.serviceType, equipment_name:osData.equipmentName, serial_number:osData.serialNumber || null, diagnostic:osData.diagnostic || null, parts_replaced:osData.partsReplaced || null, estimated_cost:osData.estimatedCost, status:osData.status }).select().single();
+      if (error || !data) throw new Error(`Não foi possível criar a ordem de serviço: ${error?.message || ''}`);
+      await supabase.from('audit_logs').insert({ tenant_id:ticket.tenant_id, user_id:osData.technicianId || null, action:'OS_CREATED', entity:'SERVICE_ORDER', entity_id:data.id, details:{ os_number:officialOSNumber, ticket_id:osData.ticketId } });
+      return { ...newOS, id:data.id, osNumber:officialOSNumber, openedAt:data.opened_at };
+    }
 
     localServiceOrders.unshift(newOS);
 
@@ -266,6 +396,23 @@ export const apiService = {
     return newOS;
   },
 
+  async updateServiceOrder(order: ServiceOrder, changes: Partial<ServiceOrder>): Promise<ServiceOrder> {
+    const { data, error } = await supabase.from('service_orders').update({
+      technician_id:changes.technicianId ?? order.technicianId ?? null, service_type:changes.serviceType ?? order.serviceType,
+      equipment_name:changes.equipmentName ?? order.equipmentName, serial_number:changes.serialNumber ?? order.serialNumber ?? null,
+      diagnostic:changes.diagnostic ?? order.diagnostic ?? null, parts_replaced:changes.partsReplaced ?? order.partsReplaced ?? null,
+      estimated_cost:changes.estimatedCost ?? order.estimatedCost, status:changes.status ?? order.status,
+      completed_at:(changes.status ?? order.status)==='COMPLETED' ? new Date().toISOString() : null
+    }).eq('id',order.id).select().single();
+    if(error || !data) throw new Error(`Não foi possível editar a OS: ${error?.message || ''}`);
+    return {...order,...changes,id:data.id,openedAt:data.opened_at,closedAt:data.completed_at || undefined};
+  },
+
+  async deleteServiceOrder(order: ServiceOrder, reason: string): Promise<void> {
+    const { error } = await supabase.rpc('delete_service_order_controlled',{p_os_id:order.id,p_reason:reason});
+    if(error) throw new Error(`Não foi possível excluir a OS: ${error.message}`);
+  },
+
   // --- USER MANAGEMENT ---
   async getCurrentProfile(userId: string): Promise<UserProfile | null> {
     if (!isSupabaseConfigured) return localUsers.find(u => u.id === userId) || null;
@@ -282,6 +429,17 @@ export const apiService = {
   },
 
   async createUser(userData: Omit<UserProfile, 'id'>): Promise<UserProfile> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.functions.invoke('invite-user', { body: userData });
+      if (error || !data?.profile) {
+        const { data: existing } = await supabase.from('profiles').select('*').ilike('email', userData.email.trim()).maybeSingle();
+        if (existing) return profileFromDb(existing);
+        let functionMessage='';
+        try { functionMessage=(await (error as any)?.context?.json?.())?.error || ''; } catch { /* resposta sem JSON */ }
+        throw new Error(data?.error || functionMessage || error?.message || 'Não foi possível convidar o usuário.');
+      }
+      return profileFromDb(data.profile);
+    }
     const newUser: UserProfile = {
       ...userData,
       id: 'u-' + Date.now()
@@ -290,13 +448,23 @@ export const apiService = {
     return newUser;
   },
 
+  async sendPasswordReset(email: string): Promise<void> {
+    const redirectTo = `${window.location.origin}/sacproh`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      if (/rate limit|too many/i.test(error.message)) throw new Error('Usuário cadastrado, mas o limite temporário de e-mails do Supabase foi atingido. Aguarde antes de reenviar ou configure um servidor SMTP próprio.');
+      throw new Error(`Não foi possível enviar o e-mail: ${error.message}`);
+    }
+  },
+
   async updateUser(userId: string, updateData: Partial<UserProfile>): Promise<UserProfile | null> {
     if (isSupabaseConfigured) {
       const { data, error } = await supabase.from('profiles').update({
         full_name: updateData.fullName, email: updateData.email, phone: updateData.phone || null,
         job_title: updateData.jobTitle || null, department: updateData.department || null,
         employee_code: updateData.employeeCode || null, manager_name: updateData.managerName || null,
-        notes: updateData.notes || null, role_code: updateData.roleCode, is_active: updateData.isActive,
+        notes: updateData.notes || null, role_code: updateData.roleCode, access_scope:updateData.accessScope,
+        unit_id:updateData.unitId || null, is_active: updateData.isActive,
         updated_at: new Date().toISOString()
       }).eq('id', userId).select().single();
       if (error) throw new Error(`Não foi possível salvar o usuário: ${error.message}`);
@@ -361,19 +529,149 @@ export const apiService = {
 
   // --- CUSTOMERS & PRODUCTS ---
   async getCustomers(): Promise<Customer[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('customers').select('*').order('name');
+      if (!error) return (data || []).map(customerFromDb);
+    }
     return localCustomers;
   },
 
+  async createCustomer(customer: Omit<Customer, 'id'>): Promise<Customer> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('customers').insert({
+        tenant_id: customer.tenantId, type: customer.type, name: customer.name,
+        trade_name: customer.tradeName || null, document: customer.document,
+        email: customer.email || null, phone: customer.phone || null,
+        whatsapp: customer.whatsapp || null, city: customer.city || null,
+        state: customer.state || null, address: customer.address || null,
+        lgpd_consent: customer.lgpdConsent,
+        lgpd_consent_at: customer.lgpdConsent ? new Date().toISOString() : null
+      }).select().single();
+      if (error || !data) throw error || new Error('Cliente não retornado pelo banco');
+      return customerFromDb(data);
+    }
+    const created = { ...customer, id: `c-${Date.now()}` };
+    localCustomers.push(created);
+    return created;
+  },
+
   async getProducts(): Promise<Product[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('products').select('*').order('name');
+      if (!error) return (data || []).map(productFromDb);
+    }
     return localProducts;
+  },
+
+  async getCarriers(): Promise<Carrier[]> {
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase.from('carriers').select('*').eq('is_active', true).order('legal_name');
+    if (error) return [];
+    return (data || []).map((row:any) => ({
+      id: row.id, tenantId: row.tenant_id, legalName: row.legal_name, tradeName: row.trade_name || undefined,
+      document: row.document || undefined, contactName: row.contact_name || undefined, email: row.email || undefined,
+      phone: row.phone || undefined, qualificationStatus: row.qualification_status, score: row.score ?? undefined,
+      isActive: row.is_active
+    }));
+  },
+
+  async createCarrier(carrier: Omit<Carrier, 'id'>): Promise<Carrier> {
+    const { data, error } = await supabase.from('carriers').insert({
+      tenant_id: carrier.tenantId, legal_name: carrier.legalName, trade_name: carrier.tradeName || null,
+      document: carrier.document || null, contact_name: carrier.contactName || null,
+      email: carrier.email || null, phone: carrier.phone || null,
+      qualification_status: carrier.qualificationStatus, score: carrier.score || null, is_active: carrier.isActive
+    }).select().single();
+    if (error || !data) throw new Error(`Não foi possível cadastrar a transportadora: ${error?.message || ''}`);
+    return { id:data.id, tenantId:data.tenant_id, legalName:data.legal_name, tradeName:data.trade_name || undefined,
+      document:data.document || undefined, contactName:data.contact_name || undefined, email:data.email || undefined,
+      phone:data.phone || undefined, qualificationStatus:data.qualification_status, score:data.score ?? undefined, isActive:data.is_active };
+  },
+
+  async uploadTicketAttachments(ticket: Ticket, files: File[], user: UserProfile): Promise<number> {
+    const allowedTypes = new Set(['image/jpeg','image/png','image/webp','video/mp4','video/webm','video/quicktime']);
+    if (!files.length) return 0;
+    if (files.length > 20) throw new Error('Envie no máximo 20 arquivos por vez.');
+    for (const file of files) {
+      if (!allowedTypes.has(file.type)) throw new Error(`O formato de ${file.name} não é permitido.`);
+      if (file.size <= 0 || file.size > 50 * 1024 * 1024) throw new Error(`${file.name} deve ter no máximo 50 MB.`);
+    }
+    let uploaded = 0;
+    for (const file of files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${ticket.tenantId}/${ticket.id}/${crypto.randomUUID()}-${safeName}`;
+      const { error: storageError } = await supabase.storage.from('sac-attachments').upload(path, file, { contentType: file.type });
+      if (storageError) throw new Error(`Falha no anexo ${file.name}: ${storageError.message}`);
+      const { error: recordError } = await supabase.from('ticket_attachments').insert({
+        ticket_id: ticket.id, tenant_id: ticket.tenantId, file_name: file.name, file_path: path,
+        file_type: file.type, file_size: file.size, uploaded_by: user.id
+      });
+      if (recordError) {
+        await supabase.storage.from('sac-attachments').remove([path]);
+        throw new Error(`Falha ao registrar ${file.name}: ${recordError.message}`);
+      }
+      uploaded++;
+    }
+    return uploaded;
+  },
+
+  async getTicketAttachments(ticketId: string): Promise<Array<{id:string;fileName:string;fileType:string;fileSize:number;url:string}>> {
+    const { data, error } = await supabase.from('ticket_attachments').select('*').eq('ticket_id', ticketId).order('created_at', { ascending:false });
+    if (error) return [];
+    return Promise.all((data || []).map(async (row:any) => {
+      const { data: signed } = await supabase.storage.from('sac-attachments').createSignedUrl(row.file_path, 3600);
+      return { id:row.id, fileName:row.file_name, fileType:row.file_type || '', fileSize:row.file_size || 0, url:signed?.signedUrl || '' };
+    }));
+  },
+
+  async getTicketComments(ticketId: string): Promise<Array<{id:string;author:string;content:string;date:string;internal:boolean}>> {
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase.from('ticket_comments').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
+    if (error) throw new Error(`Não foi possível carregar os comentários: ${error.message}`);
+    return (data || []).map((row:any) => ({ id:row.id, author:row.author_name, content:row.content, date:new Date(row.created_at).toLocaleString('pt-BR'), internal:Boolean(row.is_internal) }));
+  },
+
+  async createTicketComment(ticket: Ticket, content: string, internal: boolean, user: UserProfile): Promise<{id:string;author:string;content:string;date:string;internal:boolean}> {
+    const { data, error } = await supabase.from('ticket_comments').insert({ ticket_id:ticket.id, author_id:user.id, author_name:user.fullName, is_internal:internal, content:content.trim() }).select().single();
+    if (error || !data) throw new Error(`Não foi possível salvar o comentário: ${error?.message || ''}`);
+    await supabase.from('audit_logs').insert({ tenant_id:ticket.tenantId, user_id:user.id, user_email:user.email, action:'COMMENT_CREATED', entity:'TICKET', entity_id:ticket.id, details:{ comment_id:data.id, internal } });
+    return { id:data.id, author:data.author_name, content:data.content, date:new Date(data.created_at).toLocaleString('pt-BR'), internal:Boolean(data.is_internal) };
+  },
+
+  async updateTicketQualification(ticketId: string, stage: TicketQualificationStage, notes: string, user: UserProfile): Promise<void> {
+    const { error } = await supabase.from('tickets').update({
+      qualification_stage: stage, qualification_notes: notes, qualification_updated_at: new Date().toISOString(), updated_at: new Date().toISOString()
+    }).eq('id', ticketId);
+    if (error) throw new Error(`Não foi possível atualizar a qualificação: ${error.message}`);
+    await supabase.from('ticket_status_history').insert({
+      ticket_id: ticketId, previous_status: null, new_status: 'QUALIFICATION_UPDATE', changed_by: user.id,
+      changed_by_name: user.fullName, notes: `Qualificação: ${stage}. ${notes}`
+    });
   },
 
   // --- QUALITY & ACTIONS ---
   async getQualityPlans(): Promise<QualityActionPlan[]> {
+    if (isSupabaseConfigured) {
+      const { data,error } = await supabase.from('action_plans').select('*,ticket:tickets(protocol)').order('created_at',{ascending:false});
+      if(error) throw new Error(`Não foi possível carregar os planos de qualidade: ${error.message}`);
+      return (data||[]).map((row:any)=>({id:row.id,ticketId:row.ticket_id||undefined,protocol:row.ticket?.protocol||undefined,
+        title:row.title,rootCause:row.root_cause||'',whatAction:row.what_action,whyReason:row.why_reason||'',
+        whereLocation:row.where_location||'',whenDeadline:row.when_deadline||'',whoResponsible:row.who_responsible||'',
+        howMethod:row.how_method||'',howMuchCost:Number(row.how_much_cost||0),status:row.status}));
+    }
     return localQualityPlans;
   },
 
-  async createQualityPlan(plan: Omit<QualityActionPlan, 'id'>): Promise<QualityActionPlan> {
+  async createQualityPlan(plan: Omit<QualityActionPlan, 'id'>, user?:UserProfile): Promise<QualityActionPlan> {
+    if(isSupabaseConfigured){
+      if(!user) throw new Error('Sessão inválida para criar o plano.');
+      const {data,error}=await supabase.from('action_plans').insert({tenant_id:user.tenantId,ticket_id:plan.ticketId||null,
+        title:plan.title,root_cause:plan.rootCause,what_action:plan.whatAction,why_reason:plan.whyReason||null,
+        where_location:plan.whereLocation||null,when_deadline:plan.whenDeadline||null,who_responsible:plan.whoResponsible||null,
+        how_method:plan.howMethod||null,how_much_cost:plan.howMuchCost,status:plan.status}).select().single();
+      if(error||!data) throw new Error(`Não foi possível criar o plano: ${error?.message||''}`);
+      return {...plan,id:data.id};
+    }
     const newPlan: QualityActionPlan = {
       ...plan,
       id: 'q-' + Date.now()
@@ -384,15 +682,77 @@ export const apiService = {
 
   // --- TECHNICAL & LOGISTICS ---
   async getTechnicalCases(): Promise<TechnicalCase[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('technical_cases').select('*, technician:profiles(full_name)').order('created_at', { ascending:false });
+      if (error) throw new Error(`Não foi possível carregar as assistências técnicas: ${error.message}`);
+      return (data || []).map((row:any) => ({
+        id:row.id, ticketId:row.ticket_id, subprotocol:row.subprotocol,
+        technicianId:row.technician_id || undefined, technicianName:row.technician?.full_name || undefined,
+        diagnosticReport:row.diagnostic_report || '', replacedParts:row.replaced_parts || undefined,
+        visitDate:row.visit_date || undefined, status:row.status, cost:Number(row.cost || 0)
+      }));
+    }
     return localTechnicalCases;
   },
 
+  async saveTechnicalCase(ticket: Ticket, technicalCase: Partial<TechnicalCase>, user: UserProfile): Promise<TechnicalCase> {
+    if (!isSupabaseConfigured) {
+      const existing = localTechnicalCases.find(item => item.id === technicalCase.id);
+      if (existing) {
+        Object.assign(existing, technicalCase);
+        return existing;
+      }
+      const created: TechnicalCase = { id:`tc-${Date.now()}`, ticketId:ticket.id, subprotocol:`${ticket.protocol}-AT01`, diagnosticReport:'', status:'IN_ANALYSIS', cost:0, ...technicalCase };
+      localTechnicalCases.unshift(created);
+      return created;
+    }
+    const payload = {
+      technician_id:technicalCase.technicianId || null,
+      diagnostic_report:technicalCase.diagnosticReport?.trim() || null,
+      replaced_parts:technicalCase.replacedParts?.trim() || null,
+      visit_date:technicalCase.visitDate || null,
+      status:technicalCase.status || 'IN_ANALYSIS', cost:technicalCase.cost || 0,
+      updated_at:new Date().toISOString()
+    };
+    let row:any;
+    if (technicalCase.id) {
+      const { data, error } = await supabase.from('technical_cases').update(payload).eq('id',technicalCase.id).eq('ticket_id',ticket.id).select('*, technician:profiles(full_name)').single();
+      if (error || !data) throw new Error(`Não foi possível atualizar a assistência técnica: ${error?.message || ''}`);
+      row=data;
+    } else {
+      const { data:subprotocol, error:sequenceError } = await supabase.rpc('generate_technical_subprotocol',{p_ticket_id:ticket.id});
+      if (sequenceError) throw new Error(`Não foi possível gerar o subprotocolo: ${sequenceError.message}`);
+      const { data, error } = await supabase.from('technical_cases').insert({ ticket_id:ticket.id, subprotocol, ...payload }).select('*, technician:profiles(full_name)').single();
+      if (error || !data) throw new Error(`Não foi possível registrar a assistência técnica: ${error?.message || ''}`);
+      row=data;
+    }
+    await supabase.from('audit_logs').insert({ tenant_id:ticket.tenantId,user_id:user.id,user_email:user.email,
+      action:technicalCase.id?'TECHNICAL_CASE_UPDATED':'TECHNICAL_CASE_CREATED',entity:'TECHNICAL_CASE',entity_id:row.id,
+      details:{ticket_id:ticket.id,subprotocol:row.subprotocol} });
+    return { id:row.id,ticketId:row.ticket_id,subprotocol:row.subprotocol,technicianId:row.technician_id || undefined,
+      technicianName:row.technician?.full_name || undefined,diagnosticReport:row.diagnostic_report || '',replacedParts:row.replaced_parts || undefined,
+      visitDate:row.visit_date || undefined,status:row.status,cost:Number(row.cost || 0) };
+  },
+
   async getLogisticsCases(): Promise<LogisticsCase[]> {
+    if(isSupabaseConfigured){
+      const {data,error}=await supabase.from('logistics_cases').select('*').order('created_at',{ascending:false});
+      if(error) throw new Error(`Não foi possível carregar a logística: ${error.message}`);
+      return (data||[]).map((row:any)=>({id:row.id,ticketId:row.ticket_id,subprotocol:row.subprotocol,
+        carrierName:row.carrier_name||'',trackingCode:row.tracking_code||undefined,type:row.type,
+        freightCost:Number(row.freight_cost||0),scheduledDate:row.scheduled_date||undefined,
+        completedDate:row.completed_date||undefined,status:row.status}));
+    }
     return localLogisticsCases;
   },
 
   // --- AUDIT LOGS ---
   async getAuditLogs(): Promise<AuditLog[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending:false }).limit(500);
+      if (error) throw new Error(`Não foi possível carregar a auditoria: ${error.message}`);
+      return (data || []).map((row:any) => ({ id:row.id, userId:row.user_id || '', userEmail:row.user_email || 'Sistema', action:row.action, entity:row.entity, entityId:row.entity_id || undefined, details:typeof row.details === 'string' ? row.details : JSON.stringify(row.details || {}), createdAt:row.created_at }));
+    }
     return localAuditLogs;
   },
 

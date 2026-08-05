@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wrench, Plus, FileText, Calendar, DollarSign, CheckCircle2, AlertTriangle, Printer, Search, Clock } from 'lucide-react';
+import { Wrench, Plus, FileText, Calendar, DollarSign, CheckCircle2, AlertTriangle, Printer, Search, Clock, Edit3, Trash2 } from 'lucide-react';
 import { TechnicalCase, ServiceOrder, Ticket, UserProfile } from '../../types';
 import { NewServiceOrderModal } from './NewServiceOrderModal';
 
@@ -9,6 +9,8 @@ interface TechnicalModuleProps {
   tickets: Ticket[];
   users: UserProfile[];
   onCreateOS: (osData: Omit<ServiceOrder, 'id' | 'osNumber' | 'openedAt'>) => void;
+  onUpdateOS: (order: ServiceOrder, changes: Partial<ServiceOrder>) => Promise<void>;
+  onDeleteOS: (order: ServiceOrder, reason: string) => Promise<void>;
 }
 
 export const TechnicalModule: React.FC<TechnicalModuleProps> = ({
@@ -16,11 +18,17 @@ export const TechnicalModule: React.FC<TechnicalModuleProps> = ({
   serviceOrders,
   tickets,
   users,
-  onCreateOS
+  onCreateOS,
+  onUpdateOS,
+  onDeleteOS
 }) => {
   const [showNewOSModal, setShowNewOSModal] = useState(false);
   const [selectedOS, setSelectedOS] = useState<ServiceOrder | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [showDelete, setShowDelete] = useState(false);
+  const [operationError, setOperationError] = useState('');
 
   const filteredOS = serviceOrders.filter(os => 
     os.osNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -155,7 +163,14 @@ export const TechnicalModule: React.FC<TechnicalModuleProps> = ({
               <p><strong>Peças a Substituir:</strong> {selectedOS.partsReplaced || 'Nenhuma'}</p>
             </div>
 
+            {isEditing && <form onSubmit={async e=>{e.preventDefault();if(!selectedOS)return;try{setOperationError('');await onUpdateOS(selectedOS,selectedOS);setIsEditing(false);}catch(error){setOperationError(error instanceof Error?error.message:'Falha ao editar OS');}}} className="p-4 border rounded-xl space-y-3"><div className="grid grid-cols-2 gap-3"><label className="font-bold">Equipamento<input value={selectedOS.equipmentName} onChange={e=>setSelectedOS({...selectedOS,equipmentName:e.target.value})} className="mt-1 w-full border rounded p-2 font-normal"/></label><label className="font-bold">Número de série<input value={selectedOS.serialNumber||''} onChange={e=>setSelectedOS({...selectedOS,serialNumber:e.target.value})} className="mt-1 w-full border rounded p-2 font-normal"/></label></div><label className="block font-bold">Diagnóstico<textarea value={selectedOS.diagnostic} onChange={e=>setSelectedOS({...selectedOS,diagnostic:e.target.value})} className="mt-1 w-full border rounded p-2 font-normal"/></label><div className="grid grid-cols-2 gap-3"><label className="font-bold">Custo estimado<input type="number" step="0.01" value={selectedOS.estimatedCost} onChange={e=>setSelectedOS({...selectedOS,estimatedCost:Number(e.target.value)})} className="mt-1 w-full border rounded p-2 font-normal"/></label><label className="font-bold">Status<select value={selectedOS.status} onChange={e=>setSelectedOS({...selectedOS,status:e.target.value as ServiceOrder['status']})} className="mt-1 w-full border rounded p-2 font-normal"><option value="OPEN">Aberta</option><option value="IN_ATTENDANCE">Em atendimento</option><option value="WAITING_PARTS">Aguardando peças</option><option value="TESTING">Em testes</option><option value="COMPLETED">Concluída</option><option value="CANCELLED">Cancelada</option></select></label></div><button className="bg-[#145EDB] text-white px-4 py-2 rounded font-bold">Salvar OS</button></form>}
+
+            {showDelete && <form onSubmit={async e=>{e.preventDefault();if(!selectedOS)return;try{setOperationError('');await onDeleteOS(selectedOS,deleteReason);setSelectedOS(null);setShowDelete(false);}catch(error){setOperationError(error instanceof Error?error.message:'Falha ao excluir OS');}}} className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-2"><p className="font-bold text-red-700">Excluir definitivamente esta OS</p><textarea required placeholder="Informe o motivo da exclusão" value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} className="w-full border rounded p-2"/><button className="bg-red-600 text-white px-4 py-2 rounded font-bold">Confirmar exclusão</button></form>}
+            {operationError && <p className="bg-red-50 text-red-700 p-2 rounded">{operationError}</p>}
+
             <div className="flex justify-end space-x-2 pt-2">
+              <button onClick={()=>{setIsEditing(!isEditing);setShowDelete(false);}} className="px-4 py-2 bg-slate-100 font-bold rounded-lg flex items-center gap-1"><Edit3 className="w-4 h-4"/>Editar</button>
+              <button onClick={()=>{setShowDelete(!showDelete);setIsEditing(false);}} className="px-4 py-2 bg-red-50 text-red-700 font-bold rounded-lg flex items-center gap-1"><Trash2 className="w-4 h-4"/>Excluir</button>
               <button 
                 onClick={() => window.print()}
                 className="px-4 py-2 bg-[#0B2343] text-white font-bold rounded-lg flex items-center space-x-2"

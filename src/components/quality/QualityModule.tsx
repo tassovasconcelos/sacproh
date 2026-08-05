@@ -15,11 +15,11 @@ export const QualityModule: React.FC<QualityModuleProps> = ({ plans, onCreatePla
   const [rootCause, setRootCause] = useState('');
   const [whatAction, setWhatAction] = useState('');
   const [whyReason, setWhyReason] = useState('');
-  const [whereLocation, setWhereLocation] = useState('Central Procirúrgica');
-  const [whenDeadline, setWhenDeadline] = useState('2026-08-15');
-  const [whoResponsible, setWhoResponsible] = useState('Dra. Patricia Lima');
+  const [whereLocation, setWhereLocation] = useState('');
+  const [whenDeadline, setWhenDeadline] = useState('');
+  const [whoResponsible, setWhoResponsible] = useState('');
   const [howMethod, setHowMethod] = useState('');
-  const [howMuchCost, setHowMuchCost] = useState<number>(500);
+  const [howMuchCost, setHowMuchCost] = useState<number>(0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

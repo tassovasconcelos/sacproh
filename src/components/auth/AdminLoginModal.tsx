@@ -1,7 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Key, Lock, Mail, ShieldAlert, X } from 'lucide-react';
+import { ArrowRight, Key, Mail, ShieldAlert, X } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import { UserProfile } from '../../types';
+
+const isRecoveryCallback = () => {
+  const callback = `${window.location.search}${window.location.hash}`.toLowerCase();
+  return callback.includes('type=recovery') || sessionStorage.getItem('sacproh-password-recovery') === 'active';
+};
+
+const finishRecovery = async () => {
+  sessionStorage.removeItem('sacproh-password-recovery');
+  await supabase.auth.signOut();
+  window.history.replaceState({}, document.title, '/sacproh');
+};
 
 interface AdminLoginModalProps {
   isOpen: boolean;
@@ -15,13 +26,14 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [mode, setMode] = useState<'login' | 'request-reset' | 'update-password'>('login');
+  const [mode, setMode] = useState<'login' | 'request-reset' | 'update-password'>(() => isRecoveryCallback() ? 'update-password' : 'login');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  const [recoveryActive, setRecoveryActive] = useState(false);
+  const [recoveryActive, setRecoveryActive] = useState(isRecoveryCallback);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
+        sessionStorage.setItem('sacproh-password-recovery', 'active');
         setRecoveryActive(true);
         setMode('update-password');
         setErrorMsg('');
@@ -58,8 +70,12 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
     }
 
     if (mode === 'update-password') {
-      if (password.length < 8) {
-        setErrorMsg('A nova senha deve ter pelo menos 8 caracteres.');
+      if (!recoveryActive || !isRecoveryCallback()) {
+        setErrorMsg('Este link de recuperação não é válido. Solicite um novo link.');
+        return;
+      }
+      if (password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+        setErrorMsg('Use pelo menos 12 caracteres, com maiúscula, minúscula, número e símbolo.');
         return;
       }
       if (password !== passwordConfirmation) {
@@ -77,9 +93,9 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
       setSuccessMsg('Senha atualizada. Você já pode entrar na Área ADM.');
       setPassword('');
       setPasswordConfirmation('');
+      await finishRecovery();
       setMode('login');
       setRecoveryActive(false);
-      await supabase.auth.signOut();
       return;
     }
 
@@ -103,7 +119,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('tenant_id, unit_id, full_name, email, phone, job_title, department, employee_code, manager_name, notes, role_code, avatar_url, is_active, last_access_at')
+        .select('tenant_id, unit_id, full_name, email, phone, job_title, department, employee_code, manager_name, notes, role_code, access_scope, avatar_url, is_active, last_access_at')
         .eq('id', data.user.id)
         .single();
 
@@ -125,6 +141,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
         managerName: profile.manager_name || undefined,
         notes: profile.notes || undefined,
         roleCode: profile.role_code,
+        accessScope: profile.access_scope || (profile.role_code === 'GERENTE_LOJA' ? 'OWN' : 'TENANT'),
         avatarUrl: profile.avatar_url || undefined,
         isActive: profile.is_active,
         lastAccessAt: profile.last_access_at || undefined
@@ -140,14 +157,15 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-[#0B2343] text-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-700 overflow-hidden text-xs">
         <div className="bg-[#071325] p-5 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="p-2 bg-[#FF8500]/20 text-[#FF8500] rounded-lg"><Lock className="w-5 h-5" /></div>
+          <div className="flex items-center space-x-3">
+            <img src="/procirurgica-icon-192.png" alt="" aria-hidden="true" className="w-10 h-10 object-contain" />
             <div>
+              <img src="/procirurgica-logo.png" alt="Procirúrgica" className="h-5 w-auto mb-1.5" />
               <h3 className="font-extrabold text-sm text-white">Área Restrita ADM</h3>
               <p className="text-[11px] text-slate-400">Autenticação segura pelo Supabase</p>
             </div>
           </div>
-          <button onClick={() => { setRecoveryActive(false); onClose(); }} className="p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar">
+          <button onClick={async () => { if (recoveryActive) await finishRecovery(); setRecoveryActive(false); onClose(); }} className="p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -192,6 +210,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
               </span>
             </label>
           )}
+          {mode === 'update-password' && <p className="text-[11px] text-slate-400">Mínimo de 12 caracteres, incluindo letra maiúscula, minúscula, número e símbolo. O link é descartado após a troca.</p>}
           {mode === 'login' && (
             <button type="button" onClick={() => { setMode('request-reset'); setErrorMsg(''); setSuccessMsg(''); }}
               className="text-[#E51B2B] font-bold hover:underline">
@@ -202,7 +221,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
             O acesso é validado pelo Supabase. Nunca compartilhe sua senha.
           </div>
           <div className="pt-2 flex items-center justify-end space-x-2">
-            <button type="button" onClick={() => mode === 'login' ? onClose() : setMode('login')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl">{mode === 'login' ? 'Cancelar' : 'Voltar'}</button>
+            <button type="button" onClick={async () => { if (mode === 'update-password') { await finishRecovery(); setRecoveryActive(false); } mode === 'login' ? onClose() : setMode('login'); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl">{mode === 'login' ? 'Cancelar' : 'Voltar'}</button>
             <button type="submit" disabled={isSubmitting}
               className="px-5 py-2.5 bg-[#145EDB] hover:bg-[#0f4bb3] disabled:opacity-60 text-white font-extrabold rounded-xl shadow-lg flex items-center space-x-2">
               <span>{isSubmitting ? 'Processando...' : mode === 'request-reset' ? 'Enviar recuperação' : mode === 'update-password' ? 'Salvar nova senha' : 'Entrar na Área ADM'}</span><ArrowRight className="w-4 h-4" />

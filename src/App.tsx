@@ -1,27 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar, NavView } from './components/layout/Sidebar';
 import { TicketList } from './components/tickets/TicketList';
 import { NewTicketModal } from './components/tickets/NewTicketModal';
 import { TicketDetailView } from './components/tickets/TicketDetailView';
-import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
-import { QualityModule } from './components/quality/QualityModule';
-import { TechnicalModule } from './components/technical/TechnicalModule';
-import { LogisticsModule } from './components/logistics/LogisticsModule';
-import { SpreadsheetImporter } from './components/import/SpreadsheetImporter';
-import { KnowledgeBase } from './components/knowledge/KnowledgeBase';
-import { SettingsModule } from './components/settings/SettingsModule';
-import { GritNewsPortal } from './components/grit/GritNewsPortal';
-import { AdminLoginModal } from './components/auth/AdminLoginModal';
+const ExecutiveDashboard = lazy(() => import('./components/dashboard/ExecutiveDashboard').then(module => ({ default: module.ExecutiveDashboard })));
+const QualityModule = lazy(() => import('./components/quality/QualityModule').then(module => ({ default: module.QualityModule })));
+const TechnicalModule = lazy(() => import('./components/technical/TechnicalModule').then(module => ({ default: module.TechnicalModule })));
+const LogisticsModule = lazy(() => import('./components/logistics/LogisticsModule').then(module => ({ default: module.LogisticsModule })));
+const SpreadsheetImporter = lazy(() => import('./components/import/SpreadsheetImporter').then(module => ({ default: module.SpreadsheetImporter })));
+const KnowledgeBase = lazy(() => import('./components/knowledge/KnowledgeBase').then(module => ({ default: module.KnowledgeBase })));
+const SettingsModule = lazy(() => import('./components/settings/SettingsModule').then(module => ({ default: module.SettingsModule })));
+const GritNewsPortal = lazy(() => import('./components/grit/GritNewsPortal').then(module => ({ default: module.GritNewsPortal })));
+const AdminLoginModal = lazy(() => import('./components/auth/AdminLoginModal').then(module => ({ default: module.AdminLoginModal })));
+
+const ModuleLoading = () => <div className="min-h-[240px] flex items-center justify-center text-sm font-semibold text-slate-500">Carregando módulo...</div>;
 
 import { 
-  Tenant, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder
+  Tenant, UserProfile, Ticket, TicketStatus, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, ServiceOrder, Carrier, AuditLog
 } from './types';
-import { mockTenants, mockCustomers, mockProducts } from './lib/mockData';
 import { apiService } from './services/apiService';
 import { supabase } from './lib/supabase';
 
 export default function App() {
+  const emptyTenant: Tenant = { id:'',name:'',document:'',isActive:false };
+  const recoveryCallback = typeof window !== 'undefined' && `${window.location.search}${window.location.hash}`.toLowerCase().includes('type=recovery');
   // Check if current URL path includes /sacproh
   const isSacProhPath = typeof window !== 'undefined' && (
     window.location.pathname.toLowerCase().includes('sacproh') || 
@@ -66,8 +69,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Multi-Tenant & User Role State
-  const [tenants] = useState<Tenant[]>(mockTenants);
-  const [currentTenant, setCurrentTenant] = useState<Tenant>(mockTenants[0]);
+  const [tenants] = useState<Tenant[]>([]);
+  const [currentTenant, setCurrentTenant] = useState<Tenant>(emptyTenant);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
@@ -76,49 +79,63 @@ export default function App() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState<boolean>(false);
 
-  const [customers] = useState<Customer[]>(mockCustomers);
-  const [products] = useState<Product[]>(mockProducts);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [qualityPlans, setQualityPlans] = useState<QualityActionPlan[]>([]);
   const [technicalCases, setTechnicalCases] = useState<TechnicalCase[]>([]);
   const [logisticsCases, setLogisticsCases] = useState<LogisticsCase[]>([]);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
   // Load Initial Data
-  const loadAllData = async () => {
-    const fetchedTickets = await apiService.getTickets({ tenantId: currentTenant.id });
-    setTickets(fetchedTickets);
-
-    const fetchedUsers = await apiService.getUsers();
-    setUsers(fetchedUsers);
-
-    const qPlans = await apiService.getQualityPlans();
-    setQualityPlans(qPlans);
-
-    const tCases = await apiService.getTechnicalCases();
-    setTechnicalCases(tCases);
-
-    const lCases = await apiService.getLogisticsCases();
-    setLogisticsCases(lCases);
-
-    const sOrders = await apiService.getServiceOrders();
-    setServiceOrders(sOrders);
+  const loadAllData = async (tenantId?: string) => {
+    const effectiveTenantId = tenantId || currentUser?.tenantId || currentTenant.id;
+    const [fetchedTickets, fetchedUsers, fetchedCustomers, fetchedProducts, fetchedCarriers,
+      qPlans, tCases, lCases, sOrders, logs] = await Promise.all([
+      apiService.getTickets({ tenantId: effectiveTenantId }), apiService.getUsers(),
+      apiService.getCustomers(), apiService.getProducts(), apiService.getCarriers(),
+      apiService.getQualityPlans(), apiService.getTechnicalCases(), apiService.getLogisticsCases(),
+      apiService.getServiceOrders(), apiService.getAuditLogs()
+    ]);
+    setTickets(fetchedTickets); setUsers(fetchedUsers); setCustomers(fetchedCustomers);
+    setProducts(fetchedProducts); setCarriers(fetchedCarriers); setQualityPlans(qPlans);
+    setTechnicalCases(tCases); setLogisticsCases(lCases); setServiceOrders(sOrders); setAuditLogs(logs);
   };
 
   useEffect(() => {
-    loadAllData();
-  }, [currentTenant.id]);
+    if (!currentUser?.tenantId) return;
+    loadAllData(currentUser.tenantId);
+  }, [currentUser?.id, currentUser?.tenantId]);
 
   useEffect(() => {
+    if (recoveryCallback) {
+      sessionStorage.setItem('sacproh-password-recovery', 'active');
+      setCurrentUser(null);
+      setIsAdminAuthenticated(false);
+      setShowAdminLoginModal(true);
+    }
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        sessionStorage.setItem('sacproh-password-recovery', 'active');
+        setCurrentUser(null);
+        setIsAdminAuthenticated(false);
+        setShowAdminLoginModal(true);
+      }
+    });
     const restoreSession = async () => {
+      if (recoveryCallback || sessionStorage.getItem('sacproh-password-recovery') === 'active') return;
       const { data } = await supabase.auth.getSession();
       if (!data.session?.user) return;
       const profile = await apiService.getCurrentProfile(data.session.user.id);
       if (profile) {
+        setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
         setCurrentUser(profile);
         setIsAdminAuthenticated(['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode));
       }
     };
     restoreSession();
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
   // Ticket Created Handler
@@ -166,6 +183,36 @@ export default function App() {
     setTechnicalCases(tCases);
   };
 
+  const handleUpdateTicket = async (ticket: Ticket, changes: Partial<Ticket>) => {
+    if (!currentUser) return;
+    const updated = await apiService.updateTicket(ticket, changes, currentUser);
+    setTickets(previous => previous.map(item => item.id === updated.id ? updated : item));
+    setSelectedTicket(updated);
+  };
+
+  const handleDeleteTicket = async (ticket: Ticket, reason: string) => {
+    await apiService.deleteTicket(ticket, reason);
+    setTickets(previous => previous.filter(item => item.id !== ticket.id));
+    setSelectedTicket(null);
+  };
+
+  const handleUpdateOS = async (order: ServiceOrder, changes: Partial<ServiceOrder>) => {
+    const updated = await apiService.updateServiceOrder(order, changes);
+    setServiceOrders(previous => previous.map(item => item.id === updated.id ? updated : item));
+  };
+
+  const handleDeleteOS = async (order: ServiceOrder, reason: string) => {
+    await apiService.deleteServiceOrder(order, reason);
+    setServiceOrders(previous => previous.filter(item => item.id !== order.id));
+  };
+
+  const handleSaveTechnicalCase = async (ticket: Ticket, changes: Partial<TechnicalCase>) => {
+    if (!currentUser) throw new Error('Sessão inválida. Entre novamente.');
+    const saved = await apiService.saveTechnicalCase(ticket, changes, currentUser);
+    setTechnicalCases(previous => [saved, ...previous.filter(item => item.id !== saved.id)]);
+    return saved;
+  };
+
   // User Management Handlers
   const handleCreateUser = async (userData: Omit<UserProfile, 'id'>) => {
     const created = await apiService.createUser(userData);
@@ -188,7 +235,8 @@ export default function App() {
 
   // Quality Plan Created Handler
   const handleCreateQualityPlan = async (plan: Omit<QualityActionPlan, 'id'>) => {
-    const created = await apiService.createQualityPlan(plan);
+    if(!currentUser) return;
+    const created = await apiService.createQualityPlan(plan,currentUser);
     setQualityPlans(prev => [created, ...prev]);
   };
 
@@ -205,6 +253,7 @@ export default function App() {
   });
 
   const handleAdminAuthSuccess = (profile: UserProfile) => {
+    setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
     setCurrentUser(profile);
     const hasAdminAccess = ['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode);
     setIsAdminAuthenticated(hasAdminAccess);
@@ -220,7 +269,7 @@ export default function App() {
 
   if (appMode === 'portal') {
     return (
-      <>
+      <Suspense fallback={<ModuleLoading />}>
         <GritNewsPortal
           onGoToSAC={() => navigateToApp()}
           onOpenAdminLogin={() => {
@@ -234,18 +283,18 @@ export default function App() {
           onClose={() => setShowAdminLoginModal(false)}
           onSuccess={handleAdminAuthSuccess}
         />
-      </>
+      </Suspense>
     );
   }
 
   if (!currentUser) {
-    return <div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
+    return <Suspense fallback={<ModuleLoading />}><div className="min-h-screen bg-[#F7F9FC] flex items-center justify-center">
       <AdminLoginModal isOpen onClose={navigateToPortal} onSuccess={handleAdminAuthSuccess} />
-    </div>;
+    </div></Suspense>;
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F9FC] text-[#10233F] font-sans antialiased flex flex-col">
+    <Suspense fallback={<ModuleLoading />}><div className="min-h-screen bg-[#F7F9FC] text-[#10233F] font-sans antialiased flex flex-col">
       {/* Top Header */}
       <Header
         tenants={tenants}
@@ -276,6 +325,7 @@ export default function App() {
             setShowAdminLoginModal(true);
           }}
           onGoToPortal={() => navigateToPortal()}
+          userRole={currentUser.roleCode}
         />
 
         {/* View Workspace Content Area */}
@@ -285,12 +335,17 @@ export default function App() {
           {selectedTicket ? (
             <TicketDetailView
               ticket={selectedTicket}
+              currentUser={currentUser}
               userRole={currentUser.roleCode}
               users={users}
               onBack={() => setSelectedTicket(null)}
               onUpdateStatus={handleUpdateStatus}
               onDispatch={handleDispatchTicket}
               onCreateOS={handleCreateOS}
+              onUpdateTicket={handleUpdateTicket}
+              onDeleteTicket={handleDeleteTicket}
+              technicalCases={technicalCases}
+              onSaveTechnicalCase={handleSaveTechnicalCase}
             />
           ) : (
             <>
@@ -320,6 +375,8 @@ export default function App() {
                   tickets={tickets}
                   users={users}
                   onCreateOS={handleCreateOS}
+                  onUpdateOS={handleUpdateOS}
+                  onDeleteOS={handleDeleteOS}
                 />
               )}
 
@@ -365,23 +422,17 @@ export default function App() {
 
               {currentView === 'audit' && (
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h1 className="text-xl font-bold text-[#10233F]">Trilha de Auditoria Imutável (Audit Logs)</h1>
-                  <p className="text-xs text-slate-500">Registro histórico de todas as alterações, aberturas, transições de status e acessos no tenant Procirúrgica</p>
+                  <h1 className="text-xl font-bold text-[#10233F]">Trilha de Auditoria</h1>
+                  <p className="text-xs text-slate-500">Registro histórico real das alterações, aberturas e transições do SAC.</p>
                   <div className="divide-y divide-slate-100 text-xs pt-2">
-                    <div className="py-2.5 flex justify-between">
-                      <div>
-                        <strong className="text-[#145EDB]">STATUS_CHANGED</strong> - Protocolo SAC.2607.001
-                        <p className="text-slate-500">Status alterado de EM TRIAGEM para EM ANÁLISE TÉCNICA por Dra. Patricia Lima</p>
+                    {auditLogs.length === 0 && <p className="py-6 text-center text-slate-500">Nenhum evento registrado.</p>}
+                    {auditLogs.map(log => <div key={log.id} className="py-2.5 flex justify-between gap-4">
+                      <div><strong className="text-[#145EDB]">{log.action}</strong> · {log.entity}
+                        <p className="text-slate-500 break-all">{log.details}</p>
+                        <p className="text-slate-400">{log.userEmail}</p>
                       </div>
-                      <span className="text-slate-400">28/07/2026 10:15</span>
-                    </div>
-                    <div className="py-2.5 flex justify-between">
-                      <div>
-                        <strong className="text-emerald-600">TICKET_CREATED</strong> - Protocolo SAC.2607.001
-                        <p className="text-slate-500">Abertura de protocolo para Hospital São Mateus Ltda por Mariana Vasconcelos</p>
-                      </div>
-                      <span className="text-slate-400">28/07/2026 09:30</span>
-                    </div>
+                      <span className="text-slate-400 whitespace-nowrap">{new Date(log.createdAt).toLocaleString('pt-BR')}</span>
+                    </div>)}
                   </div>
                 </div>
               )}
@@ -396,6 +447,8 @@ export default function App() {
           customers={customers}
           products={products}
           currentTenantId={currentTenant.id}
+          currentUser={currentUser}
+          carriers={carriers}
           onClose={() => setIsNewTicketModalOpen(false)}
           onTicketCreated={handleTicketCreated}
         />
@@ -407,6 +460,6 @@ export default function App() {
         onClose={() => setShowAdminLoginModal(false)}
         onSuccess={handleAdminAuthSuccess}
       />
-    </div>
+    </div></Suspense>
   );
 }

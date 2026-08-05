@@ -1,31 +1,42 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, Clock, AlertTriangle, ShieldCheck, CheckCircle2, MessageSquare, 
-  Paperclip, Wrench, Truck, Sparkles, DollarSign, Award, History, FileText, Send, Building, User, Package, Plus 
+  Paperclip, Wrench, Truck, Sparkles, DollarSign, Award, History, FileText, Send, Building, User, Package, Plus, Edit3, Trash2, X
 } from 'lucide-react';
-import { Ticket, TicketStatus, UserRole, UserProfile, ServiceOrder } from '../../types';
+import { Ticket, TicketStatus, UserRole, UserProfile, ServiceOrder, TicketQualificationStage, TechnicalCase } from '../../types';
 import { apiService } from '../../services/apiService';
 import { DispatchTicketModal } from './DispatchTicketModal';
 import { NewServiceOrderModal } from '../technical/NewServiceOrderModal';
+import { canOperateTicket as roleCanOperateTicket,canWriteTechnical as roleCanWriteTechnical } from '../../security/accessControl';
 
 interface TicketDetailViewProps {
   ticket: Ticket;
+  currentUser: UserProfile;
   userRole: UserRole;
   users: UserProfile[];
   onBack: () => void;
   onUpdateStatus: (ticketId: string, newStatus: TicketStatus, notes: string) => void;
   onDispatch: (ticketId: string, assignedArea: string, assignedToId?: string, assignedToName?: string, notes?: string) => void;
   onCreateOS: (osData: Omit<ServiceOrder, 'id' | 'osNumber' | 'openedAt'>) => void;
+  onUpdateTicket: (ticket: Ticket, changes: Partial<Ticket>) => Promise<void>;
+  onDeleteTicket: (ticket: Ticket, reason: string) => Promise<void>;
+  technicalCases: TechnicalCase[];
+  onSaveTechnicalCase: (ticket: Ticket, changes: Partial<TechnicalCase>) => Promise<TechnicalCase>;
 }
 
 export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
   ticket,
+  currentUser,
   userRole,
   users,
   onBack,
   onUpdateStatus,
   onDispatch,
-  onCreateOS
+  onCreateOS,
+  onUpdateTicket,
+  onDeleteTicket,
+  technicalCases,
+  onSaveTechnicalCase
 }) => {
   const [activeTab, setActiveTab] = useState<
     'overview' | 'customer' | 'products' | 'history' | 'comments' | 'attachments' | 'technical' | 'logistics' | 'quality' | 'costs' | 'sla' | 'survey' | 'audit'
@@ -33,6 +44,77 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
 
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [showOSModal, setShowOSModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [editDescription, setEditDescription] = useState(ticket.description);
+  const [editCategory, setEditCategory] = useState(ticket.category);
+  const [editPriority, setEditPriority] = useState(ticket.priority);
+  const [editInvoice, setEditInvoice] = useState(ticket.invoiceNumber || '');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [operationError, setOperationError] = useState('');
+  const [isSavingOperation, setIsSavingOperation] = useState(false);
+  const [qualificationStage, setQualificationStage] = useState<TicketQualificationStage>(ticket.qualificationStage || 'REGISTRATION');
+  const [qualificationNotes, setQualificationNotes] = useState(ticket.qualificationNotes || '');
+  const [qualificationMessage, setQualificationMessage] = useState('');
+  const [attachments, setAttachments] = useState<Array<{id:string;fileName:string;fileType:string;fileSize:number;url:string}>>([]);
+  const [newAttachments, setNewAttachments] = useState<File[]>([]);
+  const [attachmentMessage, setAttachmentMessage] = useState('');
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+  const [editingTechnical, setEditingTechnical] = useState(false);
+  const [technicalDraft, setTechnicalDraft] = useState<Partial<TechnicalCase>>({ status:'IN_ANALYSIS', cost:0 });
+  const [technicalFiles, setTechnicalFiles] = useState<File[]>([]);
+  const [technicalMessage, setTechnicalMessage] = useState('');
+  const [isSavingTechnical, setIsSavingTechnical] = useState(false);
+  const canOperateTicket = roleCanOperateTicket(userRole);
+  const canOpenServiceOrder = roleCanWriteTechnical(userRole);
+  const canWriteTechnical = canOpenServiceOrder;
+
+  useEffect(() => {
+    const current = technicalCases.find(item => item.ticketId === ticket.id);
+    setTechnicalDraft(current ? { ...current } : { status:'IN_ANALYSIS', cost:0, diagnosticReport:'' });
+  }, [ticket.id, technicalCases]);
+
+  useEffect(() => { apiService.getTicketAttachments(ticket.id).then(setAttachments); }, [ticket.id]);
+
+  const uploadAttachments = async () => {
+    if (!newAttachments.length) return;
+    setIsUploadingAttachments(true);
+    setAttachmentMessage('');
+    try {
+      const count = await apiService.uploadTicketAttachments(ticket, newAttachments, currentUser);
+      setAttachments(await apiService.getTicketAttachments(ticket.id));
+      setNewAttachments([]);
+      setAttachmentMessage(`${count} arquivo(s) anexado(s) com sucesso.`);
+    } catch (error) {
+      setAttachmentMessage(error instanceof Error ? error.message : 'Não foi possível enviar os anexos.');
+    } finally {
+      setIsUploadingAttachments(false);
+    }
+  };
+
+  const saveTechnical = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsSavingTechnical(true);
+    setTechnicalMessage('');
+    try {
+      const saved = await onSaveTechnicalCase(ticket, technicalDraft);
+      if (technicalFiles.length) await apiService.uploadTicketAttachments(ticket, technicalFiles, currentUser);
+      setAttachments(await apiService.getTicketAttachments(ticket.id));
+      setTechnicalDraft(saved);
+      setTechnicalFiles([]);
+      setEditingTechnical(false);
+      setTechnicalMessage('Informações técnicas e evidências atualizadas.');
+    } catch (error) {
+      setTechnicalMessage(error instanceof Error ? error.message : 'Não foi possível salvar a assistência técnica.');
+    } finally {
+      setIsSavingTechnical(false);
+    }
+  };
+
+  const saveQualification = async () => {
+    await apiService.updateTicketQualification(ticket.id, qualificationStage, qualificationNotes, currentUser);
+    setQualificationMessage('Qualificação atualizada e registrada no histórico.');
+  };
 
   // AI Assistant Outputs
   const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -40,12 +122,14 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
 
   // New Comment Input
-  const [commentsList, setCommentsList] = useState([
-    { id: 'c1', author: 'Mariana Vasconcelos', content: 'Abertura do chamado realizada e encaminhada à análise da farmacêutica.', date: '28/07/2026 09:35', internal: false },
-    { id: 'c2', author: 'Dra. Patricia Lima', content: 'Sinalizado possível risco de instabilidade cirúrgica. Solicitada priorização da assistência técnica.', date: '28/07/2026 10:20', internal: true }
-  ]);
+  const [commentsList, setCommentsList] = useState<Array<{id:string;author:string;content:string;date:string;internal:boolean}>>([]);
   const [newCommentText, setNewCommentText] = useState('');
   const [isInternalComment, setIsInternalComment] = useState(false);
+  const [commentError, setCommentError] = useState('');
+
+  useEffect(() => {
+    apiService.getTicketComments(ticket.id).then(setCommentsList).catch(error => setCommentError(error.message));
+  }, [ticket.id]);
 
   const tabs: { id: typeof activeTab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview', label: 'Visão Geral', icon: <FileText className="w-3.5 h-3.5" /> },
@@ -63,20 +147,17 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
     { id: 'audit', label: 'Auditoria', icon: <History className="w-3.5 h-3.5" /> }
   ];
 
-  const handleAddComment = (e: React.FormEvent) => {
+  const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentText.trim()) return;
-    setCommentsList([
-      ...commentsList,
-      {
-        id: 'c-' + Date.now(),
-        author: 'Usuário Conectado',
-        content: newCommentText,
-        date: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        internal: isInternalComment
-      }
-    ]);
-    setNewCommentText('');
+    try {
+      setCommentError('');
+      const saved = await apiService.createTicketComment(ticket, newCommentText, isInternalComment, currentUser);
+      setCommentsList(previous => [...previous, saved]);
+      setNewCommentText('');
+    } catch (error) {
+      setCommentError(error instanceof Error ? error.message : 'Não foi possível salvar o comentário.');
+    }
   };
 
   const handleGenerateAiSummary = async () => {
@@ -121,23 +202,25 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
 
           {/* Quick Status & Actions */}
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            {canOperateTicket && <button onClick={()=>setShowEditModal(true)} className="bg-slate-100 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1"><Edit3 className="w-3.5 h-3.5"/>Editar SAC</button>}
+            {['SUPERADMIN','ADMIN_EMPRESA','DIRETORIA'].includes(userRole) && <button onClick={()=>setShowDeleteModal(true)} className="bg-red-50 text-red-700 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1"><Trash2 className="w-3.5 h-3.5"/>Excluir</button>}
+            {canOperateTicket && <button
               onClick={() => setShowDispatchModal(true)}
               className="bg-[#145EDB] hover:bg-[#0f4bb3] text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1 shadow"
             >
               <Send className="w-3.5 h-3.5 mr-1" />
               <span>Direcionar Chamado</span>
-            </button>
+            </button>}
 
-            <button
+            {canOpenServiceOrder && <button
               onClick={() => setShowOSModal(true)}
               className="bg-[#FF8500] hover:bg-[#e07500] text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1 shadow"
             >
               <Wrench className="w-3.5 h-3.5 mr-1" />
               <span>Abrir OS</span>
-            </button>
+            </button>}
 
-            <select
+            {canOperateTicket && <select
               value={ticket.status}
               onChange={(e) => onUpdateStatus(ticket.id, e.target.value as TicketStatus, 'Status alterado via painel do protocolo')}
               className="bg-slate-900 text-white font-bold text-xs px-3 py-1.5 rounded-lg border border-slate-700 outline-none cursor-pointer"
@@ -148,7 +231,7 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
               <option value="SENT_TO_LOGISTICS">Encaminhado à Logística</option>
               <option value="CLOSED_PROCEDENT">Encerrar Procedente</option>
               <option value="CLOSED_NON_PROCEDENT">Encerrar Não Procedente</option>
-            </select>
+            </select>}
           </div>
         </div>
 
@@ -252,6 +335,22 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
                 <p className="text-slate-700 leading-relaxed text-xs">{ticket.description}</p>
               </div>
 
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 space-y-3">
+                <div><h4 className="font-bold text-sm text-[#10233F]">Qualificação progressiva do SAC</h4>
+                  <p className="text-slate-500 mt-0.5">Atualize a maturidade do atendimento conforme a análise evolui.</p></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <select value={qualificationStage} onChange={e=>setQualificationStage(e.target.value as TicketQualificationStage)} className="bg-white border border-blue-200 rounded-lg p-2">
+                    <option value="REGISTRATION">1. Registro inicial</option><option value="DOCUMENT_VALIDATION">2. Validação documental</option>
+                    <option value="TECHNICAL_TRIAGE">3. Triagem técnica</option><option value="INVESTIGATION">4. Investigação</option>
+                    <option value="ACTION_PLAN">5. Plano de ação</option><option value="SOLUTION_VALIDATION">6. Validação da solução</option>
+                    <option value="COMPLETED">7. Qualificação concluída</option>
+                  </select>
+                  <input value={qualificationNotes} onChange={e=>setQualificationNotes(e.target.value)} placeholder="Evidências, pendências e conclusão da etapa" className="md:col-span-2 bg-white border border-blue-200 rounded-lg p-2" />
+                </div>
+                <div className="flex items-center justify-between"><span className="text-emerald-700 font-semibold">{qualificationMessage}</span>
+                  <button type="button" onClick={saveQualification} className="bg-[#145EDB] text-white font-bold px-4 py-2 rounded-lg">Salvar qualificação</button></div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                   <h4 className="font-bold text-slate-800">Classificação Comercial</h4>
@@ -259,13 +358,14 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
                   <p><strong>Nota Fiscal:</strong> {ticket.invoiceNumber}</p>
                   <p><strong>Vendedor:</strong> {ticket.sellerName}</p>
                   <p><strong>Canal de Venda:</strong> {ticket.salesChannel}</p>
+                  <p><strong>Transportadora:</strong> {ticket.carrierName || 'Não definida'}</p>
                 </div>
 
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                   <h4 className="font-bold text-slate-800">SLA & Atribuição</h4>
                   <p><strong>Área Responsável:</strong> {ticket.assignedArea}</p>
                   <p><strong>Técnico Atribuído:</strong> {ticket.assignedToName || 'Em definição'}</p>
-                  <p><strong>Vencimento SLA:</strong> {ticket.slaDueAt ? new Date(ticket.slaDueAt).toLocaleString('pt-BR') : '30/07/2026 18:00'}</p>
+                  <p><strong>Vencimento SLA:</strong> {ticket.slaDueAt ? new Date(ticket.slaDueAt).toLocaleString('pt-BR') : 'Não definido'}</p>
                 </div>
               </div>
             </div>
@@ -308,6 +408,7 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
           {/* TAB 5: COMENTÁRIOS */}
           {activeTab === 'comments' && (
             <div className="space-y-4">
+              {commentError && <p className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700">{commentError}</p>}
               <div className="space-y-3">
                 {commentsList.map(c => (
                   <div 
@@ -356,21 +457,58 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
           )}
 
           {/* TAB 7: ASSISTÊNCIA TÉCNICA */}
+          {activeTab === 'attachments' && (
+            <div className="space-y-3">
+              <h4 className="font-bold text-sm text-[#10233F]">Evidências anexadas ao chamado</h4>
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
+                  onChange={event => setNewAttachments(Array.from(event.target.files || []).slice(0, 20))}
+                  className="w-full bg-white border border-blue-200 rounded-lg p-2" />
+                {newAttachments.length > 0 && <p className="font-semibold text-blue-800">{newAttachments.length} arquivo(s) selecionado(s)</p>}
+                {attachmentMessage && <p className="text-xs font-semibold text-slate-700">{attachmentMessage}</p>}
+                <button type="button" disabled={!newAttachments.length || isUploadingAttachments} onClick={uploadAttachments}
+                  className="px-4 py-2 bg-[#145EDB] text-white rounded-lg font-bold disabled:opacity-50">
+                  {isUploadingAttachments ? 'Enviando...' : 'Anexar arquivos'}
+                </button>
+              </div>
+              {attachments.length === 0 ? <p className="p-6 text-center bg-slate-50 rounded-xl text-slate-500">Nenhuma imagem ou vídeo anexado.</p> :
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">{attachments.map(file => <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:border-[#145EDB]">
+                  <Paperclip className="w-5 h-5 text-[#145EDB] mb-2" /><p className="font-bold break-all">{file.fileName}</p><p className="text-slate-500">{file.fileType} • {(file.fileSize/1024/1024).toFixed(2)} MB</p>
+                </a>)}</div>}
+            </div>
+          )}
+
+          {/* TAB 7: ASSISTÊNCIA TÉCNICA */}
           {activeTab === 'technical' && (
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm text-[#10233F]">Subprotocolo de Assistência Técnica: SAC.2607.001-AT01</h4>
-                <span className="bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded text-[11px]">Em Análise de Bancada</span>
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="font-bold text-sm text-[#10233F]">{technicalDraft.subprotocol ? `Subprotocolo de Assistência Técnica: ${technicalDraft.subprotocol}` : 'Assistência técnica ainda não registrada'}</h4>
+                {canWriteTechnical && <button type="button" onClick={()=>setEditingTechnical(value=>!value)} className="px-3 py-1.5 bg-[#145EDB] text-white rounded-lg font-bold flex items-center gap-1"><Edit3 className="w-3.5 h-3.5"/>{technicalDraft.id?'Editar':'Registrar'}</button>}
               </div>
-              <p><strong>Técnico Responsável:</strong> Eng. Carlos Eduardo</p>
-              <p><strong>Laudo Diagnóstico:</strong> Constatado erro E-04 proveniente de oxidação nos pinos do conector da caneta monopolar. Necessária troca da placa da interface frontal.</p>
-              <p><strong>Peças Substituídas:</strong> Placa Interface Frontal HF-400W (SKU: PLC-FR-WEM)</p>
-              <p><strong>Custo Técnico Estimado:</strong> R$ 850,00</p>
+              {technicalMessage && <p className="p-2 bg-blue-50 text-blue-800 rounded-lg font-semibold">{technicalMessage}</p>}
+              {!editingTechnical && technicalDraft.id && <div className="space-y-2">
+                <p><strong>Status:</strong> {technicalDraft.status}</p>
+                <p><strong>Técnico Responsável:</strong> {technicalDraft.technicianName || 'Não definido'}</p>
+                <p><strong>Laudo Diagnóstico:</strong> {technicalDraft.diagnosticReport || 'Não informado'}</p>
+                <p><strong>Peças Substituídas:</strong> {technicalDraft.replacedParts || 'Nenhuma informada'}</p>
+                <p><strong>Data da visita:</strong> {technicalDraft.visitDate ? new Date(technicalDraft.visitDate).toLocaleString('pt-BR') : 'Não agendada'}</p>
+                <p><strong>Custo Técnico Estimado:</strong> R$ {Number(technicalDraft.cost || 0).toFixed(2)}</p>
+              </div>}
+              {!editingTechnical && !technicalDraft.id && <p className="text-slate-500">Clique em “Registrar” para gerar o subprotocolo e incluir o laudo real deste chamado.</p>}
+              {editingTechnical && <form onSubmit={saveTechnical} className="space-y-3">
+                <div className="grid md:grid-cols-2 gap-3"><label className="font-bold">Técnico<select value={technicalDraft.technicianId||''} onChange={e=>setTechnicalDraft({...technicalDraft,technicianId:e.target.value})} className="mt-1 w-full border rounded-lg p-2 font-normal"><option value="">Selecione</option>{users.filter(user=>['TECNICO','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SUPERADMIN'].includes(user.roleCode)).map(user=><option key={user.id} value={user.id}>{user.fullName}</option>)}</select></label><label className="font-bold">Status<select value={technicalDraft.status||'IN_ANALYSIS'} onChange={e=>setTechnicalDraft({...technicalDraft,status:e.target.value as TechnicalCase['status']})} className="mt-1 w-full border rounded-lg p-2 font-normal"><option value="IN_ANALYSIS">Em análise</option><option value="WAITING_PARTS">Aguardando peças</option><option value="VISIT_SCHEDULED">Visita agendada</option><option value="CONCLUDED">Concluída</option></select></label></div>
+                <label className="block font-bold">Laudo diagnóstico<textarea required rows={4} value={technicalDraft.diagnosticReport||''} onChange={e=>setTechnicalDraft({...technicalDraft,diagnosticReport:e.target.value})} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label>
+                <label className="block font-bold">Peças substituídas / novas informações<textarea rows={3} value={technicalDraft.replacedParts||''} onChange={e=>setTechnicalDraft({...technicalDraft,replacedParts:e.target.value})} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label>
+                <div className="grid md:grid-cols-2 gap-3"><label className="font-bold">Data da visita<input type="datetime-local" value={technicalDraft.visitDate?.slice(0,16)||''} onChange={e=>setTechnicalDraft({...technicalDraft,visitDate:e.target.value})} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label><label className="font-bold">Custo estimado<input type="number" min="0" step="0.01" value={technicalDraft.cost||0} onChange={e=>setTechnicalDraft({...technicalDraft,cost:Number(e.target.value)})} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label></div>
+                <label className="block font-bold">Novas imagens e evidências<input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={e=>setTechnicalFiles(Array.from(e.target.files||[]).slice(0,20))} className="mt-1 w-full bg-white border rounded-lg p-2 font-normal"/></label>
+                {technicalFiles.length>0&&<p>{technicalFiles.length} novo(s) arquivo(s) serão integrados ao chamado.</p>}
+                <div className="flex justify-end gap-2"><button type="button" onClick={()=>setEditingTechnical(false)} className="px-4 py-2 bg-slate-200 rounded-lg font-bold">Cancelar</button><button disabled={isSavingTechnical} className="px-4 py-2 bg-[#145EDB] text-white rounded-lg font-bold disabled:opacity-50">{isSavingTechnical?'Salvando...':'Salvar assistência técnica'}</button></div>
+              </form>}
             </div>
           )}
 
           {/* OTHER TABS FALLBACK */}
-          {activeTab !== 'overview' && activeTab !== 'customer' && activeTab !== 'products' && activeTab !== 'comments' && activeTab !== 'technical' && (
+          {activeTab !== 'overview' && activeTab !== 'customer' && activeTab !== 'products' && activeTab !== 'comments' && activeTab !== 'attachments' && activeTab !== 'technical' && (
             <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-slate-500">
               <p className="font-bold text-sm text-[#10233F] mb-1">Módulo {activeTab.toUpperCase()} Carregado</p>
               <p className="text-xs">Dados e registros do protocolo {ticket.protocol} sincronizados via Supabase PostgreSQL.</p>
@@ -400,6 +538,10 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
           onCreateOS={onCreateOS}
         />
       )}
+
+      {showEditModal && <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4"><form onSubmit={async e=>{e.preventDefault();setIsSavingOperation(true);setOperationError('');try{await onUpdateTicket(ticket,{description:editDescription,category:editCategory,priority:editPriority,invoiceNumber:editInvoice});setShowEditModal(false);}catch(error){setOperationError(error instanceof Error?error.message:'Falha ao editar SAC');}finally{setIsSavingOperation(false);}}} className="bg-white w-full max-w-xl rounded-2xl p-6 space-y-4 text-xs"><div className="flex justify-between"><h3 className="font-bold text-base">Editar {ticket.protocol}</h3><button type="button" onClick={()=>setShowEditModal(false)}><X className="w-5 h-5"/></button></div>{operationError&&<p className="bg-red-50 text-red-700 p-2 rounded">{operationError}</p>}<label className="block font-bold">Descrição<textarea required rows={5} value={editDescription} onChange={e=>setEditDescription(e.target.value)} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label><div className="grid md:grid-cols-3 gap-3"><label className="font-bold">Categoria<input required value={editCategory} onChange={e=>setEditCategory(e.target.value)} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label><label className="font-bold">Prioridade<select value={editPriority} onChange={e=>setEditPriority(e.target.value as Ticket['priority'])} className="mt-1 w-full border rounded-lg p-2 font-normal"><option value="LOW">Baixa</option><option value="MEDIUM">Média</option><option value="HIGH">Alta</option><option value="CRITICAL">Crítica</option></select></label><label className="font-bold">Nota fiscal<input value={editInvoice} onChange={e=>setEditInvoice(e.target.value)} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label></div><div className="flex justify-end gap-2"><button type="button" onClick={()=>setShowEditModal(false)} className="px-4 py-2 bg-slate-200 rounded-lg font-bold">Cancelar</button><button disabled={isSavingOperation} className="px-4 py-2 bg-[#145EDB] text-white rounded-lg font-bold">{isSavingOperation?'Salvando...':'Salvar alterações'}</button></div></form></div>}
+
+      {showDeleteModal && <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4"><form onSubmit={async e=>{e.preventDefault();setIsSavingOperation(true);setOperationError('');try{await onDeleteTicket(ticket,deleteReason);setShowDeleteModal(false);}catch(error){setOperationError(error instanceof Error?error.message:'Falha ao excluir SAC');}finally{setIsSavingOperation(false);}}} className="bg-white w-full max-w-md rounded-2xl p-6 space-y-4 text-xs"><h3 className="font-bold text-base text-red-700">Excluir {ticket.protocol}</h3><p>A exclusão remove também itens, comentários e OS vinculadas. O número do protocolo nunca será reutilizado.</p>{operationError&&<p className="bg-red-50 text-red-700 p-2 rounded">{operationError}</p>}<label className="block font-bold">Motivo obrigatório<textarea required value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} className="mt-1 w-full border rounded-lg p-2 font-normal"/></label><div className="flex justify-end gap-2"><button type="button" onClick={()=>setShowDeleteModal(false)} className="px-4 py-2 bg-slate-200 rounded-lg font-bold">Cancelar</button><button disabled={isSavingOperation} className="px-4 py-2 bg-red-600 text-white rounded-lg font-bold">{isSavingOperation?'Excluindo...':'Confirmar exclusão'}</button></div></form></div>}
     </div>
   );
 };

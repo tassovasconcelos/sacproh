@@ -3,6 +3,8 @@ import {
   LayoutDashboard, Ticket, CheckSquare2, Wrench, Truck, UploadCloud, 
   BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe 
 } from 'lucide-react';
+import { UserRole } from '../../types';
+import { canAccessAdmin,canCreateTicket,operationalViewsByRole } from '../../security/accessControl';
 
 export type NavView = 
   | 'dashboard' 
@@ -25,6 +27,7 @@ interface SidebarProps {
   isAdminAuthenticated: boolean;
   onOpenAdminLogin: () => void;
   onGoToPortal: () => void;
+  userRole: UserRole;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -33,7 +36,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   openTicketsCount,
   isAdminAuthenticated,
   onOpenAdminLogin,
-  onGoToPortal
+  onGoToPortal,
+  userRole
 }) => {
   const opMenuItems: { id: NavView; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'dashboard', label: 'Dashboard Executivo', icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -51,6 +55,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings', label: 'Zerar & Configurações ADM', icon: <Settings className="w-4 h-4" /> },
     { id: 'audit', label: 'Trilha de Auditoria', icon: <History className="w-4 h-4" /> },
   ];
+
+  const userCanCreateTicket = canCreateTicket(userRole);
+  const visibleOperationalItems = opMenuItems.filter(item=>operationalViewsByRole[userRole].includes(item.id as any));
 
   const handleAdminClick = (viewId: NavView) => {
     if (!isAdminAuthenticated) {
@@ -76,18 +83,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         {/* Quick New SAC Button */}
-        <button 
+        {userCanCreateTicket && <button
           onClick={() => onSelectView('new_ticket')}
           className="w-full bg-[#FF8500] hover:bg-[#e07500] text-white font-bold py-2.5 px-4 rounded-xl shadow-md flex items-center justify-center space-x-2 transition-all transform active:scale-95"
         >
           <PlusCircle className="w-5 h-5" />
           <span className="text-sm">Abrir Novo SAC</span>
-        </button>
+        </button>}
 
         {/* Operational Menu */}
         <nav className="space-y-1">
           <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Operacional SAC</p>
-          {opMenuItems.map(item => {
+          {visibleOperationalItems.map(item => {
             const isActive = currentView === item.id;
             return (
               <button
@@ -116,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         {/* Admin Menu (Restricted Section) */}
-        <nav className="space-y-1 pt-2 border-t border-slate-800">
+        {canAccessAdmin(userRole) && <nav className="space-y-1 pt-2 border-t border-slate-800">
           <div className="px-3 flex items-center justify-between mb-1">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Área Restrita ADM</p>
             {isAdminAuthenticated ? (
@@ -155,7 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             );
           })}
-        </nav>
+        </nav>}
       </div>
 
       {/* Footer Info */}
@@ -166,4 +173,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   );
 };
-

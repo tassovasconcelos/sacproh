@@ -48,6 +48,7 @@ export const mockUsers: UserProfile[] = [
     email: 'patricia.lima@procirurgica.com.br',
     phone: '(85) 99123-4567',
     roleCode: 'RESPONSAVEL_TECNICA',
+    accessScope: 'TENANT',
     isActive: true
   },
   {
@@ -58,6 +59,7 @@ export const mockUsers: UserProfile[] = [
     email: 'carlos.eduardo@procirurgica.com.br',
     phone: '(85) 98877-6655',
     roleCode: 'TECNICO',
+    accessScope: 'TENANT',
     isActive: true
   },
   {
@@ -68,6 +70,7 @@ export const mockUsers: UserProfile[] = [
     email: 'mariana.v@procirurgica.com.br',
     phone: '(85) 99911-2233',
     roleCode: 'SAC',
+    accessScope: 'TENANT',
     isActive: true
   },
   {
@@ -78,6 +81,7 @@ export const mockUsers: UserProfile[] = [
     email: 'roberto@procirurgica.com.br',
     phone: '(85) 3333-4444',
     roleCode: 'DIRETORIA',
+    accessScope: 'TENANT',
     isActive: true
   },
   {
@@ -88,6 +92,7 @@ export const mockUsers: UserProfile[] = [
     email: 'admin@grit.com.br',
     phone: '(11) 98888-0000',
     roleCode: 'SUPERADMIN',
+    accessScope: 'TENANT',
     isActive: true
   }
 ];

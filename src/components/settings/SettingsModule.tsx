@@ -3,15 +3,16 @@ import {
   Building2, ShieldCheck, Users, Clock, History, Check, Lock, Key, 
   Trash2, AlertTriangle, UserPlus, Edit3, Search, UploadCloud, RefreshCw, X 
 } from 'lucide-react';
-import { Tenant, UserProfile, UserRole } from '../../types';
+import { Tenant, UserProfile, UserRole, UserAccessScope } from '../../types';
 import { SpreadsheetImporter } from '../import/SpreadsheetImporter';
+import { apiService } from '../../services/apiService';
 
 interface SettingsModuleProps {
   tenants: Tenant[];
   currentTenant: Tenant;
   users: UserProfile[];
   onUpdateUser: (userId: string, data: Partial<UserProfile>) => void;
-  onCreateUser: (userData: Omit<UserProfile, 'id'>) => void;
+  onCreateUser: (userData: Omit<UserProfile, 'id'>) => Promise<void>;
   onResetData: () => Promise<void>;
   currentUser: UserProfile;
 }
@@ -39,8 +40,26 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('SAC');
+  const [newAccessScope, setNewAccessScope] = useState<UserAccessScope>('TENANT');
   const [newJobTitle, setNewJobTitle] = useState('');
   const [newDepartment, setNewDepartment] = useState('');
+  const [userMessage, setUserMessage] = useState('');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [passwordSendingTo, setPasswordSendingTo] = useState('');
+  const [passwordCooldowns, setPasswordCooldowns] = useState<Record<string,number>>({});
+
+  const sendPasswordEmail = async (email: string) => {
+    if ((passwordCooldowns[email] || 0) > Date.now()) return;
+    setPasswordSendingTo(email); setUserMessage('');
+    try {
+      await apiService.sendPasswordReset(email);
+      setPasswordCooldowns(previous=>({...previous,[email]:Date.now()+60*60*1000}));
+      setUserMessage(`E-mail de definição de senha enviado para ${email}. Novo envio ficará disponível em 1 hora.`);
+    } catch(error) {
+      setPasswordCooldowns(previous=>({...previous,[email]:Date.now()+10*60*1000}));
+      setUserMessage(error instanceof Error?error.message:'Falha no envio.');
+    } finally { setPasswordSendingTo(''); }
+  };
 
   const filteredUsers = users.filter(u => 
     u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -48,9 +67,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     u.roleCode.toLowerCase().includes(userSearch.toLowerCase())
   );
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    onCreateUser({
+    setUserMessage('');
+    setIsCreatingUser(true);
+    try { await onCreateUser({
       tenantId: currentTenant.id,
       fullName: newFullName,
       email: newEmail,
@@ -58,14 +79,19 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       jobTitle: newJobTitle,
       department: newDepartment,
       roleCode: newRole,
+      accessScope: newRole === 'GERENTE_LOJA' && newAccessScope === 'TENANT' ? 'OWN' : newAccessScope,
       isActive: true
     });
+    setUserMessage('Usuário cadastrado. O convite para definir a senha foi enviado por e-mail.');
     setShowAddUserModal(false);
     setNewFullName('');
     setNewEmail('');
     setNewPhone('');
     setNewJobTitle('');
     setNewDepartment('');
+    setNewAccessScope('TENANT');
+    } catch (error) { setUserMessage(error instanceof Error ? error.message : 'Não foi possível cadastrar o usuário.'); }
+    finally { setIsCreatingUser(false); }
   };
 
   const handleSaveUserEdit = (e: React.FormEvent) => {
@@ -81,6 +107,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       managerName: editingUser.managerName,
       notes: editingUser.notes,
       roleCode: editingUser.roleCode,
+      accessScope: editingUser.roleCode === 'GERENTE_LOJA' && editingUser.accessScope === 'TENANT' ? 'OWN' : editingUser.accessScope,
+      unitId: editingUser.unitId,
       isActive: editingUser.isActive
     });
     setEditingUser(null);
@@ -173,6 +201,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           {/* TAB 1: USERS & PROFILES MANAGEMENT */}
           {activeTab === 'users' && (
             <div className="space-y-4">
+              {userMessage && <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-semibold">{userMessage}</div>}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="relative flex-1 max-w-md w-full">
                   <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
@@ -229,6 +258,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                             <span>Editar Perfil</span>
+                          </button>
+                          <button type="button" disabled={passwordSendingTo===u.email || (passwordCooldowns[u.email]||0)>Date.now()} onClick={()=>sendPasswordEmail(u.email)}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-[#145EDB] rounded-lg font-bold inline-flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Key className="w-3.5 h-3.5" /><span>{passwordSendingTo===u.email?'Enviando...':(passwordCooldowns[u.email]||0)>Date.now()?'Aguardar':'Enviar senha'}</span>
                           </button>
                         </td>
                       </tr>
@@ -375,6 +408,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                 </select>
               </div>
 
+              <div><label className="block font-bold mb-1">Escopo de visualização</label><select value={editingUser.accessScope} onChange={e=>setEditingUser({...editingUser,accessScope:e.target.value as UserAccessScope})} className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-bold"><option value="OWN">Somente chamados do próprio usuário</option><option value="UNIT">Todos os chamados da unidade</option>{editingUser.roleCode!=='GERENTE_LOJA'&&<option value="TENANT">Todos os chamados da empresa</option>}</select><p className="mt-1 text-[11px] text-slate-500">Gerentes nunca recebem acesso global à empresa.</p></div>
+
               <div className="grid grid-cols-2 gap-3">
                 <label className="block font-bold">Cargo
                   <input value={editingUser.jobTitle || ''} onChange={e => setEditingUser({ ...editingUser, jobTitle: e.target.value })} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" />
@@ -469,6 +504,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                 </select>
               </div>
 
+              <div><label className="block font-bold mb-1">Escopo de visualização *</label><select value={newRole==='GERENTE_LOJA'&&newAccessScope==='TENANT'?'OWN':newAccessScope} onChange={e=>setNewAccessScope(e.target.value as UserAccessScope)} className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-bold"><option value="OWN">Somente chamados abertos por ele</option><option value="UNIT">Chamados da unidade vinculada</option>{newRole!=='GERENTE_LOJA'&&<option value="TENANT">Todos os chamados da empresa</option>}</select></div>
+
               <div className="grid grid-cols-2 gap-3">
                 <label className="block font-bold">Cargo
                   <input value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} className="mt-1 w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-normal" />
@@ -479,8 +516,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
               </div>
 
               <div className="flex justify-end space-x-2 pt-3 border-t">
-                <button type="button" onClick={() => setShowAddUserModal(false)} className="px-4 py-2 bg-slate-200 font-bold rounded-lg">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-[#145EDB] text-white font-bold rounded-lg">Cadastrar Usuário</button>
+                <button type="button" disabled={isCreatingUser} onClick={() => setShowAddUserModal(false)} className="px-4 py-2 bg-slate-200 font-bold rounded-lg disabled:opacity-50">Cancelar</button>
+                <button type="submit" disabled={isCreatingUser} className="px-4 py-2 bg-[#145EDB] text-white font-bold rounded-lg disabled:opacity-60 min-w-36">{isCreatingUser ? 'Enviando convite...' : 'Cadastrar Usuário'}</button>
               </div>
             </form>
           </div>

@@ -38,13 +38,13 @@ export const NewServiceOrderModal: React.FC<NewServiceOrderModalProps> = ({
 
     onCreateOS({
       ticketId: selectedTicketId,
-      protocol: currentTicket?.protocol || 'SAC.2607.001',
+      protocol: currentTicket?.protocol || '',
       customerName: currentTicket?.customerName || 'Hospital Cliente',
       equipmentName,
       serialNumber,
       lotNumber,
       technicianId,
-      technicianName: techUser?.fullName || 'Eng. Carlos Eduardo',
+      technicianName: techUser?.fullName || '',
       serviceType,
       urgency,
       diagnostic: diagnostic || 'Equipamento entregue em bancada. Necessária calibração e substituição de placas.',

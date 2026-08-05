@@ -8,6 +8,8 @@ export type UserRole =
   | 'LOGISTICA' 
   | 'ADMIN_EMPRESA';
 
+export type UserAccessScope = 'OWN' | 'UNIT' | 'TENANT';
+
 export interface Tenant {
   id: string;
   name: string;
@@ -38,6 +40,7 @@ export interface UserProfile {
   managerName?: string;
   notes?: string;
   roleCode: UserRole;
+  accessScope: UserAccessScope;
   avatarUrl?: string;
   isActive: boolean;
   lastAccessAt?: string;
@@ -71,6 +74,22 @@ export interface Product {
   supplierName?: string;
   countryOrigin?: string;
 }
+
+export interface Carrier {
+  id: string;
+  tenantId: string;
+  legalName: string;
+  tradeName?: string;
+  document?: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  qualificationStatus: 'PENDING' | 'QUALIFIED' | 'SUSPENDED' | 'REJECTED';
+  score?: number;
+  isActive: boolean;
+}
+
+export type TicketQualificationStage = 'REGISTRATION' | 'DOCUMENT_VALIDATION' | 'TECHNICAL_TRIAGE' | 'INVESTIGATION' | 'ACTION_PLAN' | 'SOLUTION_VALIDATION' | 'COMPLETED';
 
 export type TicketStatus = 
   | 'NEW' 
@@ -153,12 +172,16 @@ export interface Ticket {
   purchaseDate?: string;
   deliveryDate?: string;
   salesChannel?: string;
+  carrierId?: string;
+  carrierName?: string;
   
   // Occurrence
   description: string;
   category: string;
   subcategory?: string;
   classification?: string;
+  qualificationStage?: TicketQualificationStage;
+  qualificationNotes?: string;
   priority: TicketPriority;
   urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   impact: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
