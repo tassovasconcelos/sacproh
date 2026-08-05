@@ -52,6 +52,8 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
   const [qualificationNotes, setQualificationNotes] = useState(ticket.qualificationNotes || '');
   const [qualificationMessage, setQualificationMessage] = useState('');
   const [attachments, setAttachments] = useState<Array<{id:string;fileName:string;fileType:string;fileSize:number;url:string}>>([]);
+  const [newAttachments, setNewAttachments] = useState<File[]>([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
 
   useEffect(() => { apiService.getTicketAttachments(ticket.id).then(setAttachments); }, [ticket.id]);
 
@@ -403,6 +405,13 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
           {/* TAB 7: ASSISTÊNCIA TÉCNICA */}
           {activeTab === 'attachments' && (
             <div className="space-y-3">
+              <div className="rounded-xl border border-dashed border-[#145EDB]/50 bg-blue-50 p-4 space-y-2">
+                <label className="block font-bold text-[#10233F]">Adicionar novas imagens ou vídeos</label>
+                <input type="file" multiple accept="image/*,video/*" onChange={event => setNewAttachments(Array.from(event.target.files || []))} className="block w-full text-xs" />
+                {newAttachments.length > 0 && <p className="font-semibold text-[#145EDB]">{newAttachments.length} arquivo(s) selecionado(s)</p>}
+                <button type="button" disabled={!newAttachments.length || isUploadingAttachments} onClick={async()=>{setIsUploadingAttachments(true);setOperationError('');try{await apiService.uploadTicketAttachments(ticket,newAttachments,currentUser);setAttachments(await apiService.getTicketAttachments(ticket.id));setNewAttachments([]);}catch(error){setOperationError(error instanceof Error?error.message:'Falha ao enviar anexos');}finally{setIsUploadingAttachments(false);}}} className="px-4 py-2 rounded-lg bg-[#145EDB] text-white font-bold disabled:opacity-50">{isUploadingAttachments?'Enviando...':'Integrar novos anexos'}</button>
+                {operationError && <p className="text-red-700">{operationError}</p>}
+              </div>
               <h4 className="font-bold text-sm text-[#10233F]">Evidências anexadas ao chamado</h4>
               {attachments.length === 0 ? <p className="p-6 text-center bg-slate-50 rounded-xl text-slate-500">Nenhuma imagem ou vídeo anexado.</p> :
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">{attachments.map(file => <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:border-[#145EDB]">

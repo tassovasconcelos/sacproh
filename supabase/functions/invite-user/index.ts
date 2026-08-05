@@ -33,7 +33,8 @@ Deno.serve(async (req) => {
     }
     const {data:saved,error:saveError}=await admin.from('profiles').upsert({id:userId,tenant_id:profile.tenant_id,
       full_name:body.fullName,email,phone:body.phone || null,job_title:body.jobTitle || null,
-      department:body.department || null,role_code:body.roleCode,is_active:true}).select().single();
+      department:body.department || null,role_code:body.roleCode,
+      access_scope:body.roleCode==='GERENTE_LOJA'?(body.accessScope || 'OWN'):(body.accessScope || 'TENANT'),is_active:true}).select().single();
     if(saveError) throw saveError;
     return new Response(JSON.stringify({profile:saved,invitationSent,alreadyExisted:!invitationSent}),{headers:{...cors,'Content-Type':'application/json'}});
   } catch(error) {

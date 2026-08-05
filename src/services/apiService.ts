@@ -35,7 +35,7 @@ const profileFromDb = (row: any): UserProfile => ({
   fullName: row.full_name, email: row.email, phone: row.phone || undefined,
   jobTitle: row.job_title || undefined, department: row.department || undefined,
   employeeCode: row.employee_code || undefined, managerName: row.manager_name || undefined,
-  notes: row.notes || undefined, roleCode: row.role_code, avatarUrl: row.avatar_url || undefined,
+  notes: row.notes || undefined, roleCode: row.role_code, accessScope: row.access_scope || undefined, avatarUrl: row.avatar_url || undefined,
   isActive: row.is_active, lastAccessAt: row.last_access_at || undefined
 });
 
@@ -466,7 +466,7 @@ export const apiService = {
         full_name: updateData.fullName, email: updateData.email, phone: updateData.phone || null,
         job_title: updateData.jobTitle || null, department: updateData.department || null,
         employee_code: updateData.employeeCode || null, manager_name: updateData.managerName || null,
-        notes: updateData.notes || null, role_code: updateData.roleCode, is_active: updateData.isActive,
+        notes: updateData.notes || null, role_code: updateData.roleCode, access_scope: updateData.accessScope || 'TENANT', is_active: updateData.isActive,
         updated_at: new Date().toISOString()
       }).eq('id', userId).select().single();
       if (error) throw new Error(`Não foi possível salvar o usuário: ${error.message}`);
