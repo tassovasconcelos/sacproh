@@ -8,6 +8,8 @@ export type UserRole =
   | 'LOGISTICA' 
   | 'ADMIN_EMPRESA';
 
+export type UserAccessScope = 'OWN' | 'UNIT' | 'TENANT';
+
 export interface Tenant {
   id: string;
   name: string;
@@ -38,6 +40,7 @@ export interface UserProfile {
   managerName?: string;
   notes?: string;
   roleCode: UserRole;
+  accessScope?: UserAccessScope;
   avatarUrl?: string;
   isActive: boolean;
   lastAccessAt?: string;

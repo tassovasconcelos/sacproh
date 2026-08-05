@@ -104,6 +104,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       managerName: editingUser.managerName,
       notes: editingUser.notes,
       roleCode: editingUser.roleCode,
+      accessScope: editingUser.accessScope || (editingUser.roleCode === 'GERENTE_LOJA' ? 'OWN' : 'TENANT'),
       isActive: editingUser.isActive
     });
     setEditingUser(null);
@@ -401,6 +402,20 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                   <option value="SAC">Atendente SAC</option>
                   <option value="LOGISTICA">Logística / Expedição</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1">Escopo de acesso aos SACs</label>
+                <select
+                  value={editingUser.accessScope || (editingUser.roleCode === 'GERENTE_LOJA' ? 'OWN' : 'TENANT')}
+                  onChange={e => setEditingUser({ ...editingUser, accessScope: e.target.value as UserProfile['accessScope'] })}
+                  className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-lg font-bold"
+                >
+                  <option value="OWN">Somente SACs abertos pelo usuário</option>
+                  <option value="UNIT">Todos os SACs da unidade</option>
+                  <option value="TENANT">Todos os SACs da empresa</option>
+                </select>
+                <p className="mt-1 text-[10px] text-slate-500">Gerentes de loja usam por padrão o escopo próprio.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
