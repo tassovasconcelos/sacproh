@@ -51,6 +51,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [items, setItems] = useState<{
     productId: string;
     productName: string;
+    productModel: string;
+    sku: string;
     quantity: number;
     serialNumber: string;
     lotNumber: string;
@@ -58,6 +60,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     {
       productId: products[0]?.id || '',
       productName: products[0]?.name || 'Bisturi Eletrônico',
+      productModel: products[0]?.model || '',
+      sku: products[0]?.codeSku || '',
       quantity: 1,
       serialNumber: '',
       lotNumber: ''
@@ -98,6 +102,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
       {
         productId: products[0]?.id || '',
         productName: products[0]?.name || 'Novo Produto',
+        productModel: products[0]?.model || '',
+        sku: products[0]?.codeSku || '',
         quantity: 1,
         serialNumber: '',
         lotNumber: ''
@@ -128,6 +134,9 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         });
       }
       if (!customer) throw new Error('Selecione ou cadastre um cliente.');
+      if (items.some(item => !item.productId || !item.lotNumber.trim())) {
+        throw new Error('Selecione o modelo e informe o lote de todos os produtos.');
+      }
       let carrier = carriers.find(item => item.id === selectedCarrierId);
       if (showNewCarrier && newCarrier.legalName.trim()) {
         carrier = await apiService.createCarrier({ ...newCarrier, legalName:newCarrier.legalName.trim(),
@@ -168,6 +177,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         ticketId: '',
         productId: it.productId,
         productName: it.productName,
+        productModel: it.productModel,
+        sku: it.sku,
         quantity: it.quantity,
         serialNumber: it.serialNumber,
         lotNumber: it.lotNumber
@@ -386,13 +397,15 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                             const copy = [...items];
                             copy[idx].productId = e.target.value;
                             copy[idx].productName = p?.name || '';
+                            copy[idx].productModel = p?.model || '';
+                            copy[idx].sku = p?.codeSku || '';
                             setItems(copy);
                           }}
                           className="w-full bg-white border border-slate-300 rounded-lg p-1.5 font-medium text-slate-900"
                         >
                           {products.map(p => (
                             <option key={p.id} value={p.id}>
-                              {p.name} ({p.codeSku})
+                              {p.name} — Modelo {p.model || 'não informado'} ({p.codeSku})
                             </option>
                           ))}
                         </select>
@@ -428,9 +441,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-slate-600 font-semibold mb-1">Lote</label>
+                          <label className="block text-slate-600 font-semibold mb-1">Lote *</label>
                           <input
                             type="text"
+                            required
                             placeholder="L-2026"
                             value={it.lotNumber}
                             onChange={(e) => {

@@ -116,6 +116,7 @@ export interface TicketItem {
   ticketId: string;
   productId?: string;
   productName: string;
+  productModel?: string;
   sku?: string;
   quantity: number;
   serialNumber?: string;

@@ -280,7 +280,8 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
                   <div key={idx} className="p-3.5 bg-slate-50 flex flex-col sm:flex-row justify-between gap-3">
                     <div>
                       <p className="font-bold text-slate-900">{it.productName}</p>
-                      <p className="text-slate-500 font-mono text-[11px]">SKU: {it.sku} | Qtd: {it.quantity}</p>
+                      <p className="text-slate-700"><strong>Modelo:</strong> {it.productModel || 'Não informado'}</p>
+                      <p className="text-slate-500 font-mono text-[11px]">SKU: {it.sku || 'N/A'} | Qtd: {it.quantity}</p>
                     </div>
                     <div className="font-mono text-[11px] text-slate-600">
                       <p>Nº Série: <strong>{it.serialNumber || 'N/A'}</strong></p>
