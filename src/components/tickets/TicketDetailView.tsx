@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, Clock, AlertTriangle, ShieldCheck, CheckCircle2, MessageSquare, 
-  Paperclip, Wrench, Truck, Sparkles, DollarSign, Award, History, FileText, Send, Building, User, Package, Plus, Edit3, Trash2, X
+  Paperclip, Wrench, Truck, DollarSign, Award, History, FileText, Send, Building, User, Package, Plus, Edit3, Trash2, X
 } from 'lucide-react';
 import { Ticket, TicketStatus, UserRole, UserProfile, ServiceOrder, TicketQualificationStage, TechnicalCase } from '../../types';
 import { apiService } from '../../services/apiService';
@@ -65,10 +65,6 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
     setQualificationMessage('Qualificação atualizada e registrada no histórico.');
   };
 
-  // AI Assistant Outputs
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [aiSuggestedResponse, setAiSuggestedResponse] = useState<string | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
 
   // New Comment Input
   const [commentsList, setCommentsList] = useState<Array<{id:string;author:string;content:string;date:string;internal:boolean}>>([]);
@@ -109,19 +105,6 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
     }
   };
 
-  const handleGenerateAiSummary = async () => {
-    setIsAiLoading(true);
-    const summary = await apiService.summarizeTicketWithGemini(ticket);
-    setAiSummary(summary);
-    setIsAiLoading(false);
-  };
-
-  const handleSuggestAiResponse = async () => {
-    setIsAiLoading(true);
-    const resp = await apiService.suggestResponseWithGemini(ticket);
-    setAiSuggestedResponse(resp);
-    setIsAiLoading(false);
-  };
 
   return (
     <div className="space-y-5">
@@ -207,51 +190,6 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
             <span>Responsável: <strong>{ticket.assignedToName || 'Não Atribuído'}</strong></span>
           </div>
         </div>
-      </div>
-
-      {/* GEMINI AI ASSISTANT ACTION PANEL */}
-      <div className="bg-gradient-to-r from-purple-900 via-[#0B2343] to-slate-900 text-white p-4 rounded-xl shadow border border-purple-800/60 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
-            <span className="font-bold text-sm">Assistente de Inteligência Gemini (Server-Side)</span>
-          </div>
-          <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-700 px-2 py-0.5 rounded font-mono">
-            Model: gemini-2.5-flash
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleGenerateAiSummary}
-            disabled={isAiLoading}
-            className="bg-purple-800/80 hover:bg-purple-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg border border-purple-600 transition-all"
-          >
-            {isAiLoading ? 'Processando...' : 'Gerar Resumo Executivo'}
-          </button>
-          <button
-            onClick={handleSuggestAiResponse}
-            disabled={isAiLoading}
-            className="bg-slate-800 hover:bg-slate-700 text-purple-200 font-bold text-xs px-3 py-1.5 rounded-lg border border-purple-800 transition-all"
-          >
-            {isAiLoading ? 'Processando...' : 'Sugerir Resposta ao Cliente'}
-          </button>
-        </div>
-
-        {/* AI Output Result Boxes */}
-        {aiSummary && (
-          <div className="p-3 bg-purple-950/80 border border-purple-700 rounded-lg text-xs space-y-1">
-            <p className="font-bold text-purple-300">Resumo Gerado pela IA:</p>
-            <p className="text-purple-100 leading-relaxed">{aiSummary}</p>
-          </div>
-        )}
-
-        {aiSuggestedResponse && (
-          <div className="p-3 bg-slate-900/90 border border-purple-700 rounded-lg text-xs space-y-1">
-            <p className="font-bold text-purple-300">Sugestão de Resposta Formal ao Cliente:</p>
-            <p className="text-slate-200 whitespace-pre-line leading-relaxed font-mono text-[11px]">{aiSuggestedResponse}</p>
-          </div>
-        )}
       </div>
 
       {/* 13-TAB NAVIGATION BAR */}
