@@ -656,8 +656,35 @@ export const apiService = {
   },
 
   // --- TECHNICAL & LOGISTICS ---
-  async getTechnicalCases(): Promise<TechnicalCase[]> {
-    return localTechnicalCases;
+  async getTechnicalCases(ticketId?: string): Promise<TechnicalCase[]> {
+    if (isSupabaseConfigured) {
+      let query = supabase.from('technical_cases').select('*, technician:profiles(full_name)').order('created_at', { ascending: false });
+      if (ticketId) query = query.eq('ticket_id', ticketId);
+      const { data, error } = await query;
+      if (error) throw new Error(`Não foi possível carregar a assistência técnica: ${error.message}`);
+      return (data || []).map((row: any) => ({
+        id: row.id, ticketId: row.ticket_id, subprotocol: row.subprotocol,
+        technicianId: row.technician_id || undefined, technicianName: row.technician?.full_name || undefined,
+        diagnosticReport: row.diagnostic_report || '', replacedParts: row.replaced_parts || undefined,
+        visitDate: row.visit_date || undefined, status: row.status, cost: Number(row.cost || 0)
+      }));
+    }
+    return ticketId ? localTechnicalCases.filter(item => item.ticketId === ticketId) : localTechnicalCases;
+  },
+
+  async deleteTechnicalCase(technicalCase: TechnicalCase, reason: string, user: UserProfile): Promise<void> {
+    if (!reason.trim()) throw new Error('Informe o motivo da exclusão do subprotocolo.');
+    if (isSupabaseConfigured) {
+      const { data: ticket, error: ticketError } = await supabase.from('tickets').select('tenant_id').eq('id', technicalCase.ticketId).single();
+      if (ticketError || !ticket) throw new Error('SAC vinculado ao subprotocolo não encontrado.');
+      const { error } = await supabase.from('technical_cases').delete().eq('id', technicalCase.id);
+      if (error) throw new Error(`Não foi possível excluir o subprotocolo: ${error.message}`);
+      await supabase.from('audit_logs').insert({ tenant_id: ticket.tenant_id, user_id: user.id, user_email: user.email,
+        action: 'TECHNICAL_CASE_DELETED', entity: 'TECHNICAL_CASE', entity_id: technicalCase.id,
+        details: { subprotocol: technicalCase.subprotocol, ticket_id: technicalCase.ticketId, reason: reason.trim() } });
+      return;
+    }
+    localTechnicalCases = localTechnicalCases.filter(item => item.id !== technicalCase.id);
   },
 
   async getLogisticsCases(): Promise<LogisticsCase[]> {
