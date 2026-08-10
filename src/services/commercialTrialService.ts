@@ -4,7 +4,7 @@ export type CommercialTrialStatus = 'NEW' | 'QUALIFYING' | 'DEMO_SCHEDULED' | 'T
 
 export type CommercialTrial = {
   id: string; company_name: string; company_document?: string | null; contact_name: string; work_email: string; phone?: string | null;
-  segment: string; monthly_ticket_volume: string; plan_interest: string; message?: string | null;
+  segment: string; monthly_ticket_volume: string; plan_interest: string; message?: string | null; campaign_code?: string | null; lead_source?: string | null;
   status: CommercialTrialStatus; qualification_notes?: string | null; loss_reason?: string | null;
   trial_starts_at?: string | null; trial_ends_at?: string | null; created_at: string; updated_at: string;
   provisioned_tenant_id?: string | null; provisioned_admin_id?: string | null; provisioned_at?: string | null;

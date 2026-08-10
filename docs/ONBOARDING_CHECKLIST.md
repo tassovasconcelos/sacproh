@@ -15,5 +15,5 @@
 ## Go-live
 
 - Testes de acesso, backup, restauração, alertas e suporte aprovados.
-- Primeiro atendimento acompanhado e indicadores revisados em 3, 10, 20 e 30 dias.
+- No trial: 1 usuário, primeiro atendimento acompanhado e indicadores revisados nos dias 3, 10 e 15.
 - Pendências, donos e prazos registrados na ata de implantação.

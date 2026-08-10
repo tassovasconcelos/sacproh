@@ -4,7 +4,7 @@ import { submitTrialRequest, TrialRequestInput } from '../../services/trialServi
 
 const initialForm: TrialRequestInput = {
   companyName: '', contactName: '', workEmail: '', phone: '', segment: '', monthlyTicketVolume: '',
-  planInterest: 'UNDECIDED', message: '', acceptedPrivacy: false, website: '',
+  planInterest: 'UNDECIDED', message: '', acceptedPrivacy: false, website: '', campaignCode: 'LAUNCH50_FIRST5', leadSource: 'LANDING_PAGE',
 };
 
 export function TrialRequestForm() {
@@ -28,14 +28,14 @@ export function TrialRequestForm() {
     }
   };
 
-  const fieldClass = 'mt-1.5 w-full rounded-xl border border-white/15 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-cyan-300';
+  const fieldClass = 'mt-1.5 w-full rounded-xl border border-white/15 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none focus:border-orange-300';
   return <section id="trial" className="border-y border-white/10 bg-slate-900/60 px-5 py-20">
     <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[.85fr_1.15fr]">
-      <div><span className="grid h-12 w-12 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300"><CalendarCheck/></span>
-        <h2 className="mt-5 text-3xl font-black">Teste assistido por 30 dias</h2>
-        <p className="mt-4 text-slate-300">Validamos o seu processo real antes da contratação: configuração inicial, equipe piloto, indicadores e reunião de resultados.</p>
+      <div><span className="grid h-12 w-12 place-items-center rounded-xl bg-orange-400/10 text-orange-300"><CalendarCheck/></span>
+        <h2 className="mt-5 text-3xl font-black">Teste gratuito por 15 dias</h2>
+        <p className="mt-4 text-slate-300">Valide o seu processo real com 1 usuário, configuração inicial, indicadores e acompanhamento comercial da GRIT.</p>
         <ol className="mt-7 space-y-4 text-sm text-slate-300">
-          {['Qualificação da operação e definição do objetivo do piloto','Configuração segura da empresa e convite da equipe','Importação de amostra e execução dos fluxos prioritários','Revisão de indicadores e proposta do plano adequado'].map((item,index)=><li key={item} className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-cyan-300 font-black text-slate-950">{index+1}</span>{item}</li>)}
+          {['Qualificação da operação e definição do objetivo do piloto','Configuração segura para 1 usuário','Execução dos fluxos prioritários por 15 dias','Revisão de indicadores e proposta do plano adequado'].map((item,index)=><li key={item} className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-orange-300 font-black text-slate-950">{index+1}</span>{item}</li>)}
         </ol>
         <p className="mt-7 flex gap-2 text-xs text-slate-400"><ShieldCheck size={17} className="shrink-0 text-emerald-400"/>O trial não exige cartão. A ativação acontece após qualificação para proteger os dados e garantir acompanhamento.</p>
       </div>
@@ -52,7 +52,8 @@ export function TrialRequestForm() {
           <label className="hidden" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={form.website} onChange={e=>update('website',e.target.value)}/></label>
         </div>
         <label className="mt-5 flex gap-3 text-xs text-slate-400"><input required type="checkbox" checked={form.acceptedPrivacy} onChange={e=>update('acceptedPrivacy',e.target.checked)} className="mt-0.5"/>Autorizo o contato comercial e o tratamento destes dados para avaliação e ativação do trial, conforme a política de privacidade.</label>
-        <button disabled={state==='sending'} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 font-black text-slate-950 hover:bg-cyan-200 disabled:opacity-60">{state==='sending'?<LoaderCircle className="animate-spin" size={18}/>:<CalendarCheck size={18}/>}Solicitar trial assistido</button>
+        <div className="mt-5 rounded-xl border border-orange-300/30 bg-orange-400/10 p-3 text-xs text-orange-100"><strong>Campanha de lançamento:</strong> os 5 primeiros clientes aprovados recebem 50% de desconto na mensalidade por 12 meses.</div>
+        <button disabled={state==='sending'} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF8500] px-5 py-3 font-black text-white hover:bg-[#E07500] disabled:opacity-60">{state==='sending'?<LoaderCircle className="animate-spin" size={18}/>:<CalendarCheck size={18}/>}Quero testar por 15 dias</button>
         {feedback&&<p role="status" className={`mt-4 rounded-xl p-3 text-sm ${state==='success'?'bg-emerald-400/10 text-emerald-300':'bg-red-400/10 text-red-300'}`}>{feedback}</p>}
       </form>
     </div>
