@@ -7,6 +7,7 @@ const allowedOrigins = new Set([
   'https://apps.sactrial.gritnews.com.br',
   'https://apps.sacproh.gritnews.com.br',
 ]);
+try { const configured = Deno.env.get('PUBLIC_SITE_URL'); if (configured) allowedOrigins.add(new URL(configured).origin); } catch { /* configuração inválida não amplia o CORS */ }
 
 const plans = {
   START: { name: 'SAC Start', annual: 5388, setup: 1490, seats: 5 },

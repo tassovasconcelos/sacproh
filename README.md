@@ -47,3 +47,5 @@ Antes de habilitar vendas para clientes externos:
 Consulte `ARQUITETURA_SAC_4.md` para decisões de arquitetura e prioridades.
 
 Para o lançamento comercial, consulte também `COMMERCIAL_TRIAL_PLAYBOOK.md`, `COMMERCIAL_READINESS.md` e `SAC4_PRODUCT_ROADMAP.md`.
+
+O procedimento protegido para homologar migrações, segredos e funções está em `STAGING_RELEASE_RUNBOOK.md`.

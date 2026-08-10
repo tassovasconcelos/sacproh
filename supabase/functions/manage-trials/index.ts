@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const allowedOrigins=new Set(['https://apps.sactrial.gritnews.com.br']);
+try{const configured=Deno.env.get('PUBLIC_SITE_URL');if(configured)allowedOrigins.add(new URL(configured).origin);}catch{/* configuração inválida não amplia o CORS */}
 const allowedStatuses=new Set(['NEW','QUALIFYING','DEMO_SCHEDULED','TRIAL_APPROVED','TRIAL_ACTIVE','TRIAL_REVIEW','WON','LOST','DISQUALIFIED']);
 const headers={'Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const response=(origin:string,body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...headers,'Access-Control-Allow-Origin':origin,'Content-Type':'application/json','Cache-Control':'no-store'}});

@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const allowedOrigins = new Set(['https://apps.sactrial.gritnews.com.br']);
+try { const configured = Deno.env.get('PUBLIC_SITE_URL'); if (configured) allowedOrigins.add(new URL(configured).origin); } catch { /* configuração inválida não amplia o CORS */ }
 const allowedSegments = new Set(['Importador','Distribuidor','Fabricante','Indústria','Varejo','Serviços','Outro']);
 const allowedVolumes = new Set(['UP_TO_100','101_TO_500','501_TO_3000','OVER_3000']);
 const allowedPlans = new Set(['START','PRO','ENTERPRISE','UNDECIDED']);
