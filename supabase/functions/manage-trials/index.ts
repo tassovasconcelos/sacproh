@@ -64,6 +64,27 @@ Deno.serve(async req=>{
       const {error:linkError}=await admin.from('commercial_trial_requests').update({provisioned_admin_id:adminUserId,updated_at:new Date().toISOString()}).eq('id',id);if(linkError)throw linkError;
       return response(origin,{tenantId,adminEmail:trial.work_email},201);
     }
+    if(body.action==='prepare_order'){
+      const id=clean(body.id,40),contractReference=clean(body.contractEvidenceReference,300),contractVersion=clean(body.contractVersion,80);
+      if(!/^[0-9a-f-]{36}$/i.test(id)||!contractReference||!contractVersion)return response(origin,{error:'Informe a evidência e a versão do contrato assinado.'},400);
+      const {data:trial,error:trialError}=await admin.from('commercial_trial_requests').select('id,work_email,company_document,plan_interest,provisioned_tenant_id,status').eq('id',id).single();if(trialError)throw trialError;
+      if(!trial.provisioned_tenant_id||!['TRIAL_ACTIVE','TRIAL_REVIEW','WON'].includes(trial.status))return response(origin,{error:'O trial precisa estar provisionado antes do pedido anual.'},409);
+      if(!['START','PRO','ENTERPRISE'].includes(trial.plan_interest))return response(origin,{error:'Defina o plano anual antes de preparar o pedido.'},400);
+      const totals:Record<string,number>={START:6878,PRO:15938,ENTERPRISE:32978};
+      const {data:existing}=await admin.from('commercial_orders').select('id,status,checkout_token').eq('trial_request_id',id).maybeSingle();
+      if(existing?.status==='PAID')return response(origin,{error:'Este pedido já foi pago.'},409);
+      const site=(Deno.env.get('PUBLIC_SITE_URL')||'https://apps.sactrial.gritnews.com.br').replace(/\/$/,'');
+      if(existing?.status==='PAYMENT_PENDING')return response(origin,{paymentLink:`${site}/?order=${existing.checkout_token}`});
+      if(existing&&existing.status!=='APPROVED')return response(origin,{error:'O pedido está em revisão e não pode ser recriado.'},409);
+      const values={trial_request_id:id,tenant_id:trial.provisioned_tenant_id,plan_code:trial.plan_interest,company_document:trial.company_document,buyer_email:trial.work_email,
+        contract_evidence_reference:contractReference,contract_version:contractVersion,contract_accepted_at:new Date().toISOString(),contract_confirmed_by:user.id,
+        expected_amount:totals[trial.plan_interest],currency:'BRL',status:'APPROVED',updated_at:new Date().toISOString()};
+      const {data:order,error:orderError}=existing
+        ?await admin.from('commercial_orders').update(values).eq('id',existing.id).select('checkout_token').single()
+        :await admin.from('commercial_orders').insert(values).select('checkout_token').single();
+      if(orderError)throw orderError;
+      return response(origin,{paymentLink:`${site}/?order=${order.checkout_token}`},201);
+    }
     return response(origin,{error:'Ação inválida.'},400);
   }catch(error){console.error('manage-trials',error instanceof Error?error.message:error);return response(origin,{error:'Não foi possível processar o funil.'},500);}
 });

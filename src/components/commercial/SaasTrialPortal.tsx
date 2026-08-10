@@ -50,17 +50,8 @@ const requestCheckoutFallback = (plan: Plan) => {
 export function SaasTrialPortal() {
   const checkoutEnabled = (import.meta as any).env?.VITE_COMMERCIAL_CHECKOUT_ENABLED === 'true';
   const requestCheckout = async (plan: Plan) => {
-    if (!checkoutEnabled) {
-      window.alert('A contratação é liberada após validação cadastral e comercial. Envie a solicitação de avaliação para receber a proposta adequada.');
-      document.querySelector('#trial')?.scrollIntoView({ behavior: 'smooth' });
-      return;
-    }
-    try {
-      await startMercadoPagoCheckout(plan.code);
-    } catch (error) {
-      console.error(error);
-      requestCheckoutFallback(plan);
-    }
+    window.alert(`A contratação do ${plan.name} é liberada após validação cadastral e contrato. Envie a solicitação para receber a proposta e o link seguro.`);
+    document.querySelector('#trial')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -68,6 +59,8 @@ export function SaasTrialPortal() {
     const description = document.querySelector('meta[name="description"]') || document.head.appendChild(document.createElement('meta'));
     description.setAttribute('name', 'description');
     description.setAttribute('content', 'Plataforma SaaS de SAC para importadores, distribuidores, indústrias e fabricantes.');
+    const orderToken = new URLSearchParams(window.location.search).get('order');
+    if (orderToken && checkoutEnabled) startMercadoPagoCheckout(orderToken).catch(error => window.alert(error instanceof Error ? error.message : 'Não foi possível abrir o pagamento.'));
   }, []);
 
   return <div className="min-h-screen bg-slate-950 text-white font-sans">

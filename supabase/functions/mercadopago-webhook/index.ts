@@ -43,6 +43,16 @@ Deno.serve(async (req) => {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const orderId = String(payment.external_reference || '');
+    const { data: order } = /^[0-9a-f-]{36}$/i.test(orderId)
+      ? await admin.from('commercial_orders').select('*').eq('id', orderId).maybeSingle()
+      : { data: null };
+    const paymentMatchesOrder = Boolean(order
+      && Number(payment.transaction_amount) === Number(order.expected_amount)
+      && payment.currency_id === order.currency
+      && payment.metadata?.order_id === order.id
+      && payment.metadata?.tenant_id === order.tenant_id
+      && payment.metadata?.plan_code === order.plan_code);
     const { error } = await admin.from('commercial_payments').upsert({
       provider: 'mercado_pago',
       provider_payment_id: String(payment.id),
@@ -53,11 +63,29 @@ Deno.serve(async (req) => {
       amount: payment.transaction_amount,
       currency: payment.currency_id,
       payer_email: payment.payer?.email || null,
+      order_id: order?.id || null,
       paid_at: payment.date_approved || null,
       provider_payload: payment,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'provider,provider_payment_id' });
     if (error) throw error;
+    if (payment.status === 'approved' && order && order.status !== 'PAID') {
+      if (!paymentMatchesOrder) {
+        const { error: reviewError } = await admin.from('commercial_orders').update({ status: 'PAYMENT_REVIEW', updated_at: new Date().toISOString() }).eq('id', order.id);
+        if (reviewError) throw reviewError;
+        return new Response('payment queued for review', { status: 200 });
+      }
+      const { data: plan, error: planError } = await admin.from('saas_plans').select('id').eq('code', order.plan_code).eq('is_active', true).single();
+      if (planError) throw planError;
+      const now = new Date();
+      const periodEnd = new Date(now); periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
+      const { error: subscriptionError } = await admin.from('tenant_subscriptions').update({ plan_id: plan.id, status: 'ACTIVE', trial_ends_at: null,
+        current_period_start: now.toISOString(), current_period_end: periodEnd.toISOString(), billing_email: order.buyer_email,
+        provider: 'mercado_pago', provider_subscription_id: String(payment.id), updated_at: now.toISOString() }).eq('tenant_id', order.tenant_id);
+      if (subscriptionError) throw subscriptionError;
+      const { error: paidError } = await admin.from('commercial_orders').update({ status: 'PAID', paid_at: payment.date_approved || now.toISOString(), updated_at: now.toISOString() }).eq('id', order.id);
+      if (paidError) throw paidError;
+    }
     return new Response('ok', { status: 200 });
   } catch (error) {
     console.error('Webhook error', error instanceof Error ? error.message : error);

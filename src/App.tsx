@@ -15,6 +15,7 @@ const GritNewsPortal = lazy(() => import('./components/grit/GritNewsPortal').the
 const AdminLoginModal = lazy(() => import('./components/auth/AdminLoginModal').then(module => ({ default: module.AdminLoginModal })));
 const SaasTrialPortal = lazy(() => import('./components/commercial/SaasTrialPortal').then(module => ({ default: module.SaasTrialPortal })));
 const CommercialTrialAdmin = lazy(() => import('./components/commercial/CommercialTrialAdmin').then(module => ({ default: module.CommercialTrialAdmin })));
+const CommercialOrderAdmin = lazy(() => import('./components/commercial/CommercialOrderAdmin').then(module => ({ default: module.CommercialOrderAdmin })));
 
 const ModuleLoading = () => <div className="min-h-[240px] flex items-center justify-center text-sm font-semibold text-slate-500">Carregando módulo...</div>;
 
@@ -29,6 +30,7 @@ export default function App() {
   const isSaasTrialHost = typeof window !== 'undefined' &&
     window.location.hostname.toLowerCase() === 'apps.sactrial.gritnews.com.br';
   const isCommercialTrialAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-trials');
+  const isCommercialOrderAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-orders');
   const isDedicatedSacHost = typeof window !== 'undefined' &&
     window.location.hostname.toLowerCase() === 'apps.sacproh.gritnews.com.br';
 
@@ -255,6 +257,10 @@ export default function App() {
       setCurrentView(hasAdminAccess ? 'settings' : 'dashboard');
     }
   };
+
+  if (isSaasTrialHost && isCommercialOrderAdmin) {
+    return <Suspense fallback={<ModuleLoading />}><CommercialOrderAdmin /></Suspense>;
+  }
 
   if (isSaasTrialHost && isCommercialTrialAdmin) {
     return <Suspense fallback={<ModuleLoading />}><CommercialTrialAdmin /></Suspense>;

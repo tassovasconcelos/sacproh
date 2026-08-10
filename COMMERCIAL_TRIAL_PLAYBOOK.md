@@ -76,6 +76,12 @@ Antes de liberar em produção:
 - confirme o recebimento do convite, a definição de senha e o isolamento do novo tenant;
 - mantenha o pagamento separado do provisionamento até a conciliação entre pedido comercial, contrato e pagador estar validada.
 
+## Conversão anual e pagamento
+
+Com o trial provisionado, o operador acessa `/commercial-orders`, seleciona a empresa e informa a referência e a versão do contrato aceito. O sistema cria um pedido anual conciliado e fornece um link individual para o cliente. Esse registro vincula trial, tenant, CNPJ, plano, comprador, contrato, valor e moeda.
+
+O checkout aceita somente o token desse pedido. Depois do pagamento, o webhook compara identificadores, plano, tenant, valor e moeda. Divergências entram em `PAYMENT_REVIEW`; somente uma correspondência integral converte a assinatura do tenant para `ACTIVE` por 12 meses. O processamento repetido do mesmo pagamento não amplia o período nem duplica o pedido.
+
 ## Métricas do funil
 
 - Leads por origem e segmento.

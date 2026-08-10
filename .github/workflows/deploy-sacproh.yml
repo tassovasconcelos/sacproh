@@ -36,6 +36,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_COMMERCIAL_CHECKOUT_ENABLED: ${{ vars.COMMERCIAL_CHECKOUT_ENABLED || 'false' }}
         run: npm run build:web
 
       - name: Configurar GitHub Pages

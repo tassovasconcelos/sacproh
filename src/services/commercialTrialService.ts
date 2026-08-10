@@ -29,4 +29,7 @@ export const commercialTrialService = {
   async provision(id: string) {
     return invoke({ action: 'provision', id }) as Promise<{ tenantId: string; adminEmail: string }>;
   },
+  async prepareOrder(id: string, contractEvidenceReference: string, contractVersion: string) {
+    return invoke({ action: 'prepare_order', id, contractEvidenceReference, contractVersion }) as Promise<{ paymentLink: string }>;
+  },
 };
