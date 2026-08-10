@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export type TenantBranding={tenantId:string;logoPath?:string;logoUrl?:string;primaryColor:string;secondaryColor:string;accentColor:string;textColor:string;documentFooter?:string;showPoweredBy:boolean};
-export const defaultBranding:TenantBranding={tenantId:'',primaryColor:'#145EDB',secondaryColor:'#0B2343',accentColor:'#22D3EE',textColor:'#10233F',showPoweredBy:true};
+export const defaultBranding:TenantBranding={tenantId:'',logoUrl:'/grit-logo.png',primaryColor:'#FF8500',secondaryColor:'#0B2343',accentColor:'#FF8500',textColor:'#10233F',documentFooter:'GRIT Soluções e Negócios · gritsolucoes@gmail.com',showPoweredBy:true};
 const map=(row:any):TenantBranding=>{const logoPath=row.logo_path||undefined;return{tenantId:row.tenant_id,logoPath,logoUrl:logoPath?supabase.storage.from('tenant-branding').getPublicUrl(logoPath).data.publicUrl:undefined,primaryColor:row.primary_color,secondaryColor:row.secondary_color,accentColor:row.accent_color,textColor:row.text_color,documentFooter:row.document_footer||undefined,showPoweredBy:row.show_powered_by};};
 
 export const brandingService={

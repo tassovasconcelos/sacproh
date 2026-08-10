@@ -1,19 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --procirurgica-red: #e51b2b;
-  --procirurgica-red-dark: #b90f1d;
-  --procirurgica-charcoal: #202124;
-  --procirurgica-surface: #f6f6f6;
+  --grit-navy: #0b2343;
+  --grit-navy-dark: #071325;
+  --grit-orange: #ff8500;
+  --grit-orange-dark: #e07500;
+  --grit-surface: #f7f9fc;
+  --grit-text: #10233f;
 }
 
 body {
-  background: var(--procirurgica-surface);
-  color: var(--procirurgica-charcoal);
+  background: var(--grit-surface);
+  color: var(--grit-text);
 }
 
 ::selection {
-  background: var(--procirurgica-red);
+  background: var(--grit-orange);
   color: #fff;
 }
 
