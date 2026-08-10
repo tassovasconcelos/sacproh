@@ -16,6 +16,7 @@ async function findInvitedUser(admin: ReturnType<typeof createClient>, email: st
   }
   return null;
 }
+async function notifyCommercial(subject:string,text:string,key:string){const apiKey=Deno.env.get('RESEND_API_KEY'),from=Deno.env.get('COMMERCIAL_ALERT_FROM');if(!apiKey||!from)return;const result=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json','Idempotency-Key':key,'User-Agent':'sac4-commercial-alerts/1.0'},body:JSON.stringify({from,to:[Deno.env.get('COMMERCIAL_ALERT_TO')||'gritsolucoes@gmail.com'],subject,text,reply_to:'gritsolucoes@gmail.com'})});if(!result.ok)console.error('Falha no alerta comercial',result.status,await result.text());}
 
 Deno.serve(async req=>{
   const origin=req.headers.get('origin')||'';
@@ -41,6 +42,17 @@ Deno.serve(async req=>{
     if(body.action==='list_alerts'){
       const {data,error}=await admin.from('commercial_alerts').select('id,severity,alert_type,message,status,created_at,order_id').eq('status','OPEN').order('created_at',{ascending:false}).limit(100);
       if(error)throw error;return response(origin,{items:data});
+    }
+    if(body.action==='list_customers'){
+      const {data,error}=await admin.from('tenant_subscriptions').select('id,tenant_id,status,trial_ends_at,current_period_end,billing_email,updated_at,tenant:tenants(name,trade_name,document,is_active),plan:saas_plans(code,name,included_seats)').order('updated_at',{ascending:false}).limit(300);
+      if(error)throw error;return response(origin,{items:data});
+    }
+    if(body.action==='update_subscription'){
+      const subscriptionId=clean(body.id,40),nextStatus=clean(body.status,20),reason=clean(body.reason,1000);
+      if(!/^[0-9a-f-]{36}$/i.test(subscriptionId)||!['ACTIVE','SUSPENDED','CANCELED'].includes(nextStatus)||reason.length<10)return response(origin,{error:'Assinatura, status e justificativa detalhada são obrigatórios.'},400);
+      const {error:updateError}=await admin.rpc('manage_commercial_subscription',{p_subscription_id:subscriptionId,p_actor_id:user.id,p_new_status:nextStatus,p_reason:reason});if(updateError)throw updateError;
+      await notifyCommercial(`[SAC 4.0] Assinatura alterada para ${nextStatus}`,`Assinatura: ${subscriptionId}\nNovo status: ${nextStatus}\nJustificativa: ${reason}\nOperador: ${user.email}`,`subscription-${subscriptionId}-${nextStatus}-${Date.now()}`);
+      return response(origin,{ok:true});
     }
     if(body.action==='acknowledge_alert'){
       const alertId=clean(body.id,40);if(!/^[0-9a-f-]{36}$/i.test(alertId))return response(origin,{error:'Alerta inválido.'},400);
@@ -70,6 +82,7 @@ Deno.serve(async req=>{
         const {error:profileError}=await admin.from('profiles').upsert({id:adminUserId,tenant_id:tenantId,full_name:trial.contact_name,email:trial.work_email,role_code:'SUPERADMIN',is_active:true},{onConflict:'id'});if(profileError)throw profileError;
       }
       const {error:linkError}=await admin.from('commercial_trial_requests').update({provisioned_admin_id:adminUserId,updated_at:new Date().toISOString()}).eq('id',id);if(linkError)throw linkError;
+      await notifyCommercial(`[SAC 4.0] Trial ativado: ${trial.company_name}`,`Empresa: ${trial.company_name}\nAdministrador: ${trial.contact_name} <${trial.work_email}>\nTenant: ${tenantId}\nTrial de 30 dias provisionado.`,`provision-${id}`);
       return response(origin,{tenantId,adminEmail:trial.work_email},201);
     }
     if(body.action==='prepare_order'){

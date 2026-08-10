@@ -51,3 +51,5 @@ Para o lançamento comercial, consulte também `COMMERCIAL_TRIAL_PLAYBOOK.md`, `
 O procedimento protegido para homologar migrações, segredos e funções está em `STAGING_RELEASE_RUNBOOK.md`.
 
 A configuração de logo, cores e identidade dos documentos está descrita em `TENANT_BRANDING_GUIDE.md`.
+
+A central completa de manuais do produto, administração, comercial, onboarding, suporte, tecnologia e privacidade está em `docs/README.md`.

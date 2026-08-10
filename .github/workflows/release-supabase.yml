@@ -38,6 +38,9 @@ jobs:
       MERCADO_PAGO_ACCESS_TOKEN: ${{ secrets.MERCADO_PAGO_ACCESS_TOKEN }}
       MERCADO_PAGO_WEBHOOK_SECRET: ${{ secrets.MERCADO_PAGO_WEBHOOK_SECRET }}
       COMMERCIAL_CHECKOUT_ENABLED: ${{ vars.COMMERCIAL_CHECKOUT_ENABLED || 'false' }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      COMMERCIAL_ALERT_FROM: ${{ secrets.COMMERCIAL_ALERT_FROM }}
+      COMMERCIAL_ALERT_TO: ${{ secrets.COMMERCIAL_ALERT_TO || 'gritsolucoes@gmail.com' }}
     steps:
       - name: Baixar código
         uses: actions/checkout@v6
@@ -50,7 +53,7 @@ jobs:
       - name: Validar configuração protegida
         shell: bash
         run: |
-          required=(SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF COMMERCIAL_ADMIN_EMAILS SAC_APP_URL PUBLIC_SITE_URL MERCADO_PAGO_ACCESS_TOKEN MERCADO_PAGO_WEBHOOK_SECRET)
+          required=(SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF COMMERCIAL_ADMIN_EMAILS SAC_APP_URL PUBLIC_SITE_URL MERCADO_PAGO_ACCESS_TOKEN MERCADO_PAGO_WEBHOOK_SECRET RESEND_API_KEY COMMERCIAL_ALERT_FROM COMMERCIAL_ALERT_TO)
           for name in "${required[@]}"; do
             if [ -z "${!name}" ]; then echo "Configuração ausente: $name"; exit 1; fi
           done
@@ -78,6 +81,9 @@ jobs:
           MERCADO_PAGO_ACCESS_TOKEN="$MERCADO_PAGO_ACCESS_TOKEN"
           MERCADO_PAGO_WEBHOOK_SECRET="$MERCADO_PAGO_WEBHOOK_SECRET"
           COMMERCIAL_CHECKOUT_ENABLED="$COMMERCIAL_CHECKOUT_ENABLED"
+          RESEND_API_KEY="$RESEND_API_KEY"
+          COMMERCIAL_ALERT_FROM="$COMMERCIAL_ALERT_FROM"
+          COMMERCIAL_ALERT_TO="$COMMERCIAL_ALERT_TO"
           --project-ref "$PROJECT_REF"
 
       - name: Publicar funções comerciais

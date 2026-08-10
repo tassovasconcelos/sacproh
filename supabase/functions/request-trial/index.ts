@@ -12,6 +12,7 @@ function json(origin: string, body: unknown, status = 200) {
 }
 
 const clean = (value: unknown, max: number) => String(value || '').trim().slice(0,max);
+async function notifyLead(subject:string,text:string,key:string){const apiKey=Deno.env.get('RESEND_API_KEY'),from=Deno.env.get('COMMERCIAL_ALERT_FROM');if(!apiKey||!from){console.warn('Alerta comercial não enviado: Resend não configurado.');return;}const result=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json','Idempotency-Key':key,'User-Agent':'sac4-commercial-alerts/1.0'},body:JSON.stringify({from,to:[Deno.env.get('COMMERCIAL_ALERT_TO')||'gritsolucoes@gmail.com'],subject,text,reply_to:'gritsolucoes@gmail.com'})});if(!result.ok)console.error('Falha no alerta comercial',result.status,await result.text());}
 
 Deno.serve(async req => {
   const origin=req.headers.get('origin') || '';
@@ -38,6 +39,7 @@ Deno.serve(async req => {
     const {data,error}=await admin.from('commercial_trial_requests').insert({company_name:companyName,contact_name:contactName,work_email:workEmail,phone,segment,
       monthly_ticket_volume:monthlyTicketVolume,plan_interest:planInterest,message,privacy_consent_at:new Date().toISOString()}).select('id,status').single();
     if(error) throw error;
+    await notifyLead(`[SAC 4.0] Novo lead: ${companyName}`,`Empresa: ${companyName}\nContato: ${contactName}\nE-mail: ${workEmail}\nTelefone: ${phone||'Não informado'}\nSegmento: ${segment}\nVolume: ${monthlyTicketVolume}\nPlano: ${planInterest}\nDesafio: ${message||'Não informado'}\n\nAcesse o backoffice comercial para qualificar o lead.`,`trial-${data.id}`);
     return json(origin,{requestId:data.id,status:data.status},201);
   } catch(error) {
     console.error('request-trial',error instanceof Error?error.message:error);

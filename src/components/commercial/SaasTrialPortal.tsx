@@ -44,7 +44,7 @@ const requestCheckoutFallback = (plan: Plan) => {
   }
   const subject = encodeURIComponent(`Contratação anual ${plan.name}`);
   const body = encodeURIComponent(`Olá, quero contratar o plano ${plan.name} por 12 meses, incluindo o setup. Por favor, envie o link seguro para pagamento no cartão.`);
-  window.location.assign(`mailto:comercial@gritnews.com.br?subject=${subject}&body=${body}`);
+  window.location.assign(`mailto:gritsolucoes@gmail.com?subject=${subject}&body=${body}`);
 };
 
 export function SaasTrialPortal() {
@@ -111,8 +111,10 @@ export function SaasTrialPortal() {
         </div>
       </section>
 
+      <section className="px-5 py-16"><div className="mx-auto max-w-5xl rounded-3xl border border-cyan-300/30 bg-gradient-to-r from-blue-950 to-cyan-950 p-8 text-center md:p-12"><span className="text-sm font-black uppercase tracking-widest text-cyan-300">Vamos estruturar seu SAC?</span><h2 className="mt-3 text-3xl font-black md:text-4xl">Receba uma demonstração orientada ao seu processo real</h2><p className="mx-auto mt-4 max-w-2xl text-slate-300">Converse sobre atendimento, garantia, lote, validade, assistência técnica, qualidade, logística e indicadores. A avaliação inicial não exige cartão.</p><div className="mt-7 flex flex-wrap justify-center gap-3"><a href="#trial" className="rounded-xl bg-cyan-300 px-6 py-3 font-black text-slate-950">Solicitar teste assistido</a><a href="mailto:gritsolucoes@gmail.com?subject=Quero%20conhecer%20o%20SAC%204.0" className="rounded-xl border border-white/20 px-6 py-3 font-bold">gritsolucoes@gmail.com</a></div></div></section>
+
       <section id="seguranca" className="border-t border-white/10 bg-slate-900/50 px-5 py-16"><div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-[.8fr_1.2fr]"><div><span className="grid h-12 w-12 place-items-center rounded-xl bg-emerald-400/10 text-emerald-300"><LockKeyhole/></span><h2 className="mt-5 text-3xl font-black">Segurança desde a arquitetura</h2><p className="mt-3 text-slate-400">Cada empresa acessa somente seus próprios dados, com autenticação, trilha de auditoria e políticas no banco.</p></div><div className="grid gap-3 sm:grid-cols-2">{['Isolamento multiempresa (RLS)','Controle de acesso por função','HTTPS e conteúdo protegido','Auditoria de alterações','Backups e continuidade','Adequação progressiva à LGPD'].map(item=><div key={item} className="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-950 p-4"><ShieldCheck className="text-emerald-400" size={19}/><span className="text-sm font-semibold">{item}</span></div>)}</div></div></section>
     </main>
-    <footer className="border-t border-white/10 px-5 py-8 text-center text-xs text-slate-500">© {new Date().getFullYear()} SAC 4.0 • Tecnologia e operação por GRIT NEWS</footer>
+    <footer className="border-t border-white/10 px-5 py-8 text-center text-xs text-slate-500">© {new Date().getFullYear()} SAC 4.0 • Comercial: gritsolucoes@gmail.com</footer>
   </div>;
 }

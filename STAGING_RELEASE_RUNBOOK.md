@@ -14,6 +14,9 @@ Crie os ambientes `staging` e `production` em **Settings → Environments**. No 
 | `SAC_APP_URL` | endereço HTTPS usado no convite do administrador |
 | `MERCADO_PAGO_ACCESS_TOKEN` | credencial do provedor para o ambiente |
 | `MERCADO_PAGO_WEBHOOK_SECRET` | validação criptográfica dos webhooks |
+| `RESEND_API_KEY` | envio seguro dos alertas comerciais |
+| `COMMERCIAL_ALERT_FROM` | remetente em domínio verificado, por exemplo `SAC 4.0 <alertas@seudominio.com>` |
+| `COMMERCIAL_ALERT_TO` | destinatário; usar `gritsolucoes@gmail.com` |
 
 Crie também a variável de ambiente `COMMERCIAL_CHECKOUT_ENABLED`. Mantenha `false` até CNPJ, contrato, aceite e pedido estarem conciliados. Para liberar o pagamento, ela deve ser `true` no ambiente e o build do portal deve receber `VITE_COMMERCIAL_CHECKOUT_ENABLED=true`.
 
