@@ -26,6 +26,7 @@ Deno.serve(async req => {
     const workEmail=clean(body.workEmail,200).toLowerCase(), phone=clean(body.phone,30) || null;
     const segment=clean(body.segment,40), monthlyTicketVolume=clean(body.monthlyTicketVolume,30);
     const planInterest=clean(body.planInterest,20) || 'UNDECIDED', message=clean(body.message,1200) || null;
+    const campaignCode=clean(body.campaignCode,80) || 'ORGANIC', leadSource=clean(body.leadSource,80) || 'LANDING_PAGE';
     if(!companyName || !contactName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(workEmail)) return json(origin,{error:'Empresa, contato e e-mail profissional são obrigatórios.'},400);
     if(!allowedSegments.has(segment) || !allowedVolumes.has(monthlyTicketVolume) || !allowedPlans.has(planInterest)) return json(origin,{error:'Dados de qualificação inválidos.'},400);
     if(body.acceptedPrivacy!==true) return json(origin,{error:'O consentimento de privacidade é obrigatório.'},400);
@@ -37,9 +38,9 @@ Deno.serve(async req => {
     if((count || 0)>=2) return json(origin,{error:'Já recebemos sua solicitação. Aguarde o contato da equipe comercial.'},429);
 
     const {data,error}=await admin.from('commercial_trial_requests').insert({company_name:companyName,contact_name:contactName,work_email:workEmail,phone,segment,
-      monthly_ticket_volume:monthlyTicketVolume,plan_interest:planInterest,message,privacy_consent_at:new Date().toISOString()}).select('id,status').single();
+      monthly_ticket_volume:monthlyTicketVolume,plan_interest:planInterest,message,campaign_code:campaignCode,lead_source:leadSource,privacy_consent_at:new Date().toISOString()}).select('id,status').single();
     if(error) throw error;
-    await notifyLead(`[SAC 4.0] Novo lead: ${companyName}`,`Empresa: ${companyName}\nContato: ${contactName}\nE-mail: ${workEmail}\nTelefone: ${phone||'Não informado'}\nSegmento: ${segment}\nVolume: ${monthlyTicketVolume}\nPlano: ${planInterest}\nDesafio: ${message||'Não informado'}\n\nAcesse o backoffice comercial para qualificar o lead.`,`trial-${data.id}`);
+    await notifyLead(`[SAC 4.0] Novo lead da campanha: ${companyName}`,`Empresa: ${companyName}\nContato: ${contactName}\nE-mail: ${workEmail}\nTelefone: ${phone||'Não informado'}\nSegmento: ${segment}\nVolume: ${monthlyTicketVolume}\nPlano: ${planInterest}\nCampanha: ${campaignCode}\nOrigem: ${leadSource}\nDesafio: ${message||'Não informado'}\n\nAcesse o backoffice comercial para realizar o follow-up.`,`trial-${data.id}`);
     return json(origin,{requestId:data.id,status:data.status},201);
   } catch(error) {
     console.error('request-trial',error instanceof Error?error.message:error);

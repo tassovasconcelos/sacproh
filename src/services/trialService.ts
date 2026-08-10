@@ -11,6 +11,8 @@ export type TrialRequestInput = {
   message?: string;
   acceptedPrivacy: boolean;
   website?: string;
+  campaignCode?: string;
+  leadSource?: string;
 };
 
 export async function submitTrialRequest(input: TrialRequestInput) {

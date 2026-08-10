@@ -64,7 +64,7 @@ Deno.serve(async req=>{
       const companyDocument=clean(body.companyDocument,30).replace(/\D/g,'');
       if(companyDocument&&companyDocument.length!==14)return response(origin,{error:'O CNPJ deve conter 14 dígitos.'},400);
       const patch:Record<string,unknown>={status,company_document:companyDocument||null,qualification_notes:clean(body.qualificationNotes,3000)||null,loss_reason:clean(body.lossReason,500)||null,assigned_to:user.id,updated_at:new Date().toISOString()};
-      if(status==='TRIAL_ACTIVE')patch.trial_starts_at=new Date().toISOString(),patch.trial_ends_at=new Date(Date.now()+30*86400000).toISOString();
+      if(status==='TRIAL_ACTIVE')patch.trial_starts_at=new Date().toISOString(),patch.trial_ends_at=new Date(Date.now()+15*86400000).toISOString();
       const {data,error}=await admin.from('commercial_trial_requests').update(patch).eq('id',id).select('*').single();if(error)throw error;return response(origin,{item:data});
     }
     if(body.action==='provision'){
@@ -82,7 +82,7 @@ Deno.serve(async req=>{
         const {error:profileError}=await admin.from('profiles').upsert({id:adminUserId,tenant_id:tenantId,full_name:trial.contact_name,email:trial.work_email,role_code:'SUPERADMIN',is_active:true},{onConflict:'id'});if(profileError)throw profileError;
       }
       const {error:linkError}=await admin.from('commercial_trial_requests').update({provisioned_admin_id:adminUserId,updated_at:new Date().toISOString()}).eq('id',id);if(linkError)throw linkError;
-      await notifyCommercial(`[SAC 4.0] Trial ativado: ${trial.company_name}`,`Empresa: ${trial.company_name}\nAdministrador: ${trial.contact_name} <${trial.work_email}>\nTenant: ${tenantId}\nTrial de 30 dias provisionado.`,`provision-${id}`);
+      await notifyCommercial(`[SAC 4.0] Trial ativado: ${trial.company_name}`,`Empresa: ${trial.company_name}\nAdministrador: ${trial.contact_name} <${trial.work_email}>\nTenant: ${tenantId}\nTrial de 15 dias e 1 usuário provisionado.`,`provision-${id}`);
       return response(origin,{tenantId,adminEmail:trial.work_email},201);
     }
     if(body.action==='prepare_order'){

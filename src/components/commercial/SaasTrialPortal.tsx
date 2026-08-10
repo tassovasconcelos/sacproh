@@ -9,6 +9,8 @@ type Plan = {
   description: string;
   monthly: string;
   annual: string;
+  promotionalMonthly: string;
+  promotionalAnnual: string;
   setup: string;
   seats: string;
   highlight?: boolean;
@@ -19,19 +21,19 @@ type Plan = {
 const plans: Plan[] = [
   {
     code: 'START', name: 'SAC Start', description: 'Para operações que estão estruturando o atendimento.',
-    monthly: 'R$ 449', annual: 'R$ 5.388', setup: 'R$ 1.490', seats: '5 usuários incluídos',
+    monthly: 'R$ 449', annual: 'R$ 5.388', promotionalMonthly: 'R$ 224,50', promotionalAnnual: 'R$ 2.694', setup: 'R$ 1.490', seats: '5 usuários incluídos',
     checkout: (import.meta as any).env?.VITE_CHECKOUT_START_URL,
     features: ['Até 500 chamados/mês', 'Dashboard gerencial', 'Anexos, SLA e auditoria', 'Implantação assistida'],
   },
   {
     code: 'PRO', name: 'SAC Profissional', description: 'Para distribuidores, importadores e fabricantes.',
-    monthly: 'R$ 1.079', annual: 'R$ 12.948', setup: 'R$ 2.990', seats: '15 usuários incluídos', highlight: true,
+    monthly: 'R$ 1.079', annual: 'R$ 12.948', promotionalMonthly: 'R$ 539,50', promotionalAnnual: 'R$ 6.474', setup: 'R$ 2.990', seats: '15 usuários incluídos', highlight: true,
     checkout: (import.meta as any).env?.VITE_CHECKOUT_PRO_URL,
     features: ['Até 3.000 chamados/mês', 'Marca e fluxos personalizados', 'Relatórios executivos e API', 'Onboarding e importação inicial'],
   },
   {
     code: 'ENTERPRISE', name: 'SAC Enterprise', description: 'Para grupos com múltiplas empresas e operações.',
-    monthly: 'R$ 2.249', annual: 'R$ 26.988', setup: 'R$ 5.990', seats: '40 usuários incluídos',
+    monthly: 'R$ 2.249', annual: 'R$ 26.988', promotionalMonthly: 'R$ 1.124,50', promotionalAnnual: 'R$ 13.494', setup: 'R$ 5.990', seats: '40 usuários incluídos',
     checkout: (import.meta as any).env?.VITE_CHECKOUT_ENTERPRISE_URL,
     features: ['Chamados sob política comercial', 'Multiempresa e múltiplas unidades', 'SSO, auditoria avançada e API', 'Gerente de implantação dedicado'],
   },
@@ -67,7 +69,7 @@ export function SaasTrialPortal() {
     <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
         <a href="#inicio" className="flex items-center gap-3" aria-label="SAC 4.0 GRIT - início">
-          <img src="/grit-logo.png" alt="GRIT Soluções e Negócios" className="h-12 w-52 object-cover object-center" />
+          <img src="/grit-logo.png" alt="GRIT Soluções e Negócios" className="h-16 w-52 object-cover object-center sm:h-20 sm:w-60" />
           <div className="hidden border-l border-slate-700 pl-3 sm:block"><strong className="block text-lg leading-none">SAC 4.0</strong><span className="text-xs text-slate-400">Gestão inteligente de atendimento</span></div>
         </a>
         <nav className="hidden gap-6 text-sm text-slate-300 md:flex" aria-label="Navegação principal">
@@ -82,10 +84,10 @@ export function SaasTrialPortal() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,133,0,.18),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(11,35,67,.45),transparent_32%)]" />
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[1.15fr_.85fr]">
           <div>
-            <span className="inline-flex rounded-full border border-orange-400/30 bg-orange-400/10 px-3 py-1 text-xs font-bold text-orange-300">SaaS multiempresa • contratação anual</span>
-            <h1 className="mt-6 max-w-4xl text-4xl font-black tracking-tight md:text-6xl">Transforme o SAC em uma operação mensurável, segura e rentável.</h1>
+            <span className="inline-flex rounded-full border border-orange-400/30 bg-orange-400/10 px-3 py-1 text-xs font-bold text-orange-300">Lançamento GRIT • somente 5 vagas promocionais</span>
+            <h1 className="mt-6 max-w-4xl text-4xl font-black tracking-tight md:text-6xl">Seu SAC mais inteligente com <span className="text-[#FF8500]">50% de desconto</span> por 1 ano.</h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">Centralize chamados, assistência técnica, qualidade, logística, documentos, evidências e indicadores em uma plataforma preparada para importadores, distribuidores, indústrias e fabricantes.</p>
-            <div className="mt-8 flex flex-wrap gap-3"><a href="#trial" className="inline-flex items-center gap-2 rounded-xl bg-[#FF8500] px-6 py-3 font-bold text-white hover:bg-[#E07500]">Iniciar avaliação <ArrowRight size={18}/></a><a href="#planos" className="rounded-xl border border-white/20 px-6 py-3 font-semibold hover:bg-white/5">Ver planos</a></div>
+            <div className="mt-8 flex flex-wrap gap-3"><a href="#trial" className="inline-flex items-center gap-2 rounded-xl bg-[#FF8500] px-6 py-3 font-bold text-white hover:bg-[#E07500]">Garantir minha vaga <ArrowRight size={18}/></a><a href="#oferta" className="rounded-xl border border-white/20 px-6 py-3 font-semibold hover:bg-white/5">Ver oferta de lançamento</a></div>
             <p className="mt-4 flex items-center gap-2 text-xs text-slate-400"><CreditCard size={15}/> Pagamento por link seguro. O SAC 4.0 não armazena dados de cartão.</p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-orange-950/30">
@@ -95,6 +97,12 @@ export function SaasTrialPortal() {
           </div>
         </div>
       </section>
+
+      <section id="oferta" className="border-y border-orange-300/20 bg-[#0B2343] px-5 py-16">
+        <div className="mx-auto max-w-7xl"><div className="grid items-center gap-10 lg:grid-cols-[.72fr_1.28fr]"><img src="/flyer-lancamento-sac4.png" alt="Campanha de lançamento SAC 4.0 com 50% de desconto" className="mx-auto w-full max-w-sm rounded-3xl shadow-2xl shadow-black/30"/><div><span className="rounded-full bg-[#FF8500] px-4 py-1.5 text-xs font-black uppercase tracking-widest">Oferta pioneiros SAC 4.0</span><h2 className="mt-5 text-3xl font-black md:text-5xl">Metade do preço durante os primeiros 12 meses</h2><p className="mt-4 text-slate-300">Você conhece o desafio: o cliente cobra resposta, a fábrica precisa de rastreabilidade e a equipe perde tempo procurando informações. O SAC 4.0 conecta atendimento, qualidade, garantia e logística em um único fluxo.</p><div className="mt-7 overflow-hidden rounded-2xl border border-white/10"><table className="w-full text-left text-sm"><thead className="bg-slate-950/70 text-slate-300"><tr><th className="p-4">Plano</th><th className="p-4">Preço normal</th><th className="p-4">Lançamento</th><th className="hidden p-4 sm:table-cell">12 meses com 50%</th></tr></thead><tbody>{plans.map(plan=><tr key={plan.code} className="border-t border-white/10"><td className="p-4 font-bold">{plan.name}</td><td className="p-4 text-slate-400 line-through">{plan.monthly}/mês</td><td className="p-4 font-black text-orange-300">{plan.promotionalMonthly}/mês</td><td className="hidden p-4 text-emerald-300 sm:table-cell">{plan.promotionalAnnual}</td></tr>)}</tbody></table></div><p className="mt-3 text-xs text-slate-400">Condição exclusiva para os 5 primeiros clientes aprovados. O setup permanece no valor normal. Campanha sujeita a contrato e disponibilidade.</p><a href="#trial" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#FF8500] px-6 py-3 font-black text-white hover:bg-[#E07500]">Quero conversar sobre minha operação <ArrowRight size={18}/></a></div></div></div>
+      </section>
+
+      <section className="px-5 py-16"><div className="mx-auto max-w-7xl"><div className="text-center"><span className="text-xs font-black uppercase tracking-[.25em] text-orange-300">Feito para a sua realidade</span><h2 className="mt-3 text-3xl font-black md:text-4xl">Qual destas situações mais se parece com a sua operação?</h2></div><div className="mt-9 grid gap-5 md:grid-cols-3">{[['Distribuidores','Múltiplos fornecedores, entregas, devoluções e clientes cobrando posição. Centralize o histórico e responda com segurança.'],['Importadores','Rastreie lote, validade, fabricante, garantia e documentação do produto desde a entrada até a solução do chamado.'],['Fábricas','Transforme reclamações em causa raiz, plano de ação e melhoria contínua, com indicadores para qualidade e diretoria.']].map(([title,text])=><article key={title} className="rounded-3xl border border-white/10 bg-white/[.04] p-6 transition hover:-translate-y-1 hover:border-orange-300/50"><span className="text-xs font-black uppercase tracking-widest text-orange-300">SAC 4.0 para</span><h3 className="mt-2 text-2xl font-black">{title}</h3><p className="mt-3 text-sm leading-6 text-slate-300">{text}</p><a href="#trial" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-orange-300">Quero avaliar meu processo <ArrowRight size={16}/></a></article>)}</div></div></section>
 
       <section id="recursos" className="border-y border-white/10 bg-slate-900/50 px-5 py-16">
         <div className="mx-auto max-w-7xl"><h2 className="text-center text-3xl font-black">Um fluxo único do atendimento à solução</h2><p className="mx-auto mt-3 max-w-2xl text-center text-slate-400">Operação padronizada, indicadores reais e rastreabilidade para toda a equipe.</p>
