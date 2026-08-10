@@ -45,3 +45,5 @@ Antes de habilitar vendas para clientes externos:
 7. valide backup, restauração, monitoramento e resposta a incidentes.
 
 Consulte `ARQUITETURA_SAC_4.md` para decisões de arquitetura e prioridades.
+
+Para o lançamento comercial, consulte também `COMMERCIAL_TRIAL_PLAYBOOK.md`, `COMMERCIAL_READINESS.md` e `SAC4_PRODUCT_ROADMAP.md`.

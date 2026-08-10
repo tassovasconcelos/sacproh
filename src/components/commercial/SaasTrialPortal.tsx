@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { ArrowRight, BarChart3, Check, CreditCard, Headphones, LockKeyhole, ShieldCheck, Users } from 'lucide-react';
 import { startMercadoPagoCheckout } from '../../services/checkoutService';
+import { TrialRequestForm } from './TrialRequestForm';
 
 type Plan = {
   code: 'START' | 'PRO' | 'ENTERPRISE';
@@ -71,7 +72,7 @@ export function SaasTrialPortal() {
           <div><strong className="block text-lg leading-none">SAC 4.0</strong><span className="text-xs text-slate-400">Gestão inteligente de atendimento</span></div>
         </a>
         <nav className="hidden gap-6 text-sm text-slate-300 md:flex" aria-label="Navegação principal">
-          <a href="#recursos" className="hover:text-white">Recursos</a><a href="#planos" className="hover:text-white">Planos</a><a href="#seguranca" className="hover:text-white">Segurança</a>
+          <a href="#recursos" className="hover:text-white">Recursos</a><a href="#trial" className="hover:text-white">Trial</a><a href="#planos" className="hover:text-white">Planos</a><a href="#seguranca" className="hover:text-white">Segurança</a>
         </nav>
         <a href="#planos" className="rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-cyan-300">Conhecer planos</a>
       </div>
@@ -85,7 +86,7 @@ export function SaasTrialPortal() {
             <span className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-300">SaaS multiempresa • contratação anual</span>
             <h1 className="mt-6 max-w-4xl text-4xl font-black tracking-tight md:text-6xl">Transforme o SAC em uma operação mensurável, segura e rentável.</h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">Centralize chamados, assistência técnica, qualidade, logística, documentos, evidências e indicadores em uma plataforma preparada para importadores, distribuidores, indústrias e fabricantes.</p>
-            <div className="mt-8 flex flex-wrap gap-3"><a href="#planos" className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-6 py-3 font-bold text-slate-950 hover:bg-cyan-300">Ver planos anuais <ArrowRight size={18}/></a><a href="mailto:comercial@gritnews.com.br?subject=Demonstracao%20SAC%204.0" className="rounded-xl border border-white/20 px-6 py-3 font-semibold hover:bg-white/5">Solicitar demonstração</a></div>
+            <div className="mt-8 flex flex-wrap gap-3"><a href="#trial" className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-6 py-3 font-bold text-slate-950 hover:bg-cyan-300">Iniciar avaliação <ArrowRight size={18}/></a><a href="#planos" className="rounded-xl border border-white/20 px-6 py-3 font-semibold hover:bg-white/5">Ver planos</a></div>
             <p className="mt-4 flex items-center gap-2 text-xs text-slate-400"><CreditCard size={15}/> Pagamento por link seguro. O SAC 4.0 não armazena dados de cartão.</p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-cyan-950/40">
@@ -101,6 +102,8 @@ export function SaasTrialPortal() {
           <div className="mt-10 grid gap-4 md:grid-cols-3">{['Abertura, triagem e protocolo contínuo','Qualificação, causa raiz e plano de ação','Assistência técnica, OS e peças','Transportadora, coleta e logística reversa','Nota fiscal, lote, série, fornecedor e fábrica','SLA, alertas, auditoria e relatórios'].map(item=><div key={item} className="flex gap-3 rounded-2xl border border-white/10 bg-slate-950 p-5"><Check className="mt-0.5 shrink-0 text-cyan-300" size={19}/><span className="font-semibold text-slate-200">{item}</span></div>)}</div>
         </div>
       </section>
+
+      <TrialRequestForm />
 
       <section id="planos" className="px-5 py-20">
         <div className="mx-auto max-w-7xl"><div className="text-center"><span className="text-sm font-bold uppercase tracking-widest text-cyan-300">Condição sugerida de lançamento</span><h2 className="mt-2 text-3xl font-black md:text-4xl">Planos anuais + setup de implantação</h2><p className="mt-3 text-slate-400">Valores comerciais sugeridos, com contrato de 12 meses. Usuários adicionais cobrados conforme o plano.</p></div>

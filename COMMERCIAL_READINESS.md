@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-O produto já possui portal comercial, planos, checkout Mercado Pago, autenticação Supabase, módulos operacionais de SAC e uma base multiempresa. Esta revisão integrou o endurecimento de isolamento entre tenants, recuperou o lockfile reproduzível, protegeu as APIs do servidor e adicionou validação contínua.
+O produto já possui portal comercial, planos, checkout Mercado Pago, autenticação Supabase, módulos operacionais de SAC e uma base multiempresa. Esta revisão integrou o endurecimento de isolamento entre tenants, recuperou o lockfile reproduzível, protegeu as APIs do servidor, adicionou validação contínua e criou a captação segura para o trial assistido.
 
 ## Bloqueadores antes da venda em escala
 
@@ -12,6 +12,7 @@ O produto já possui portal comercial, planos, checkout Mercado Pago, autentica�
 - Confiabilidade: testar backup/restauração, observabilidade, alertas, fila/reprocessamento de webhooks e recuperação de desastre.
 - Qualidade: criar testes automatizados para autenticação, autorização, isolamento multiempresa, tickets, anexos, checkout e webhook.
 - Comercial: confirmar preços, impostos, política de cancelamento, usuários excedentes, limites de armazenamento e chamadas de IA.
+- Trial: criar o backoffice comercial e alertas de novos leads; até lá, a triagem da tabela protegida é uma operação interna controlada.
 
 ## Critérios de go-live
 
