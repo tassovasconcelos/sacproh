@@ -41,6 +41,11 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy request-trial --project-ref ysfiyonceduhmdjgtghl --no-verify-jwt
 
+      - name: Publicar gestão comercial de trials
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy manage-trials --project-ref ysfiyonceduhmdjgtghl --no-verify-jwt
+
   build:
     runs-on: ubuntu-latest
     steps:

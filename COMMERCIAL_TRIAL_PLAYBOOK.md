@@ -58,6 +58,12 @@ Trials sem atividade por sete dias entram em recuperação comercial. Ao términ
 5. Publicar a política de privacidade e transformar o texto de consentimento em link antes de campanhas abertas.
 6. Repetir o processo em produção e acompanhar erros e tempo da primeira resposta nas primeiras 72 horas.
 
+## Backoffice comercial
+
+O funil interno fica em `/commercial-trials` no domínio do portal. O acesso exige simultaneamente uma sessão Supabase ativa, perfil `SUPERADMIN` e e-mail presente no segredo `COMMERCIAL_ADMIN_EMAILS` da função `manage-trials`. Configure o segredo como uma lista de e-mails separados por vírgula e nunca exponha essa lista no frontend.
+
+No painel, o operador pode consultar até 200 solicitações recentes, registrar notas, motivo de perda e movimentar a oportunidade pelo funil. Ao ativar o trial, o sistema registra automaticamente o início e o término de 30 dias. A criação do tenant e dos usuários continua sendo uma etapa separada até o provisionamento automatizado.
+
 ## Métricas do funil
 
 - Leads por origem e segmento.
