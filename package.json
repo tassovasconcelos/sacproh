@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.cjs",
     "lint": "tsc --noEmit",
-    "check": "pnpm lint && pnpm build"
+    "commercial:guard": "node scripts/check-commercial-release.mjs",
+    "check": "pnpm commercial:guard && pnpm lint && pnpm build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
