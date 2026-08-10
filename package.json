@@ -2,6 +2,7 @@
   "name": "grit-sac-4",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@10.28.2",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -10,7 +11,8 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.cjs",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "check": "pnpm lint && pnpm build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

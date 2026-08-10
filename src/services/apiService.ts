@@ -6,6 +6,13 @@ import {
 } from '../lib/mockData';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
+const authenticatedJsonHeaders = async (): Promise<Record<string, string>> => {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error('Entre novamente para usar os recursos inteligentes.');
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+};
+
 // In-Memory store for preview mode when Supabase is not connected
 let localTickets = [...mockTickets];
 let localCustomers = [...mockCustomers];
@@ -679,7 +686,7 @@ export const apiService = {
     try {
       const res = await fetch('/api/ai/classify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authenticatedJsonHeaders(),
         body: JSON.stringify({ description })
       });
       if (res.ok) {
@@ -719,7 +726,7 @@ export const apiService = {
     try {
       const res = await fetch('/api/ai/summarize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authenticatedJsonHeaders(),
         body: JSON.stringify({ ticket })
       });
       if (res.ok) {
@@ -737,7 +744,7 @@ export const apiService = {
     try {
       const res = await fetch('/api/ai/suggest-response', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authenticatedJsonHeaders(),
         body: JSON.stringify({ ticket })
       });
       if (res.ok) {

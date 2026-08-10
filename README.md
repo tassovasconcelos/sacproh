@@ -30,4 +30,18 @@ As migrações estão em `supabase/migrations`. A migração `002_enterprise_con
 
 Não existem credenciais administrativas padrão. Usuários são autenticados pelo Supabase Auth e autorizados por perfil ativo em `profiles`. Chaves privadas e senhas nunca devem ser enviadas ao repositório.
 
+As rotas de IA e importação exigem um token válido do Supabase e aplicam limite de requisições. Em produção, configure também `SUPABASE_URL` e `SUPABASE_ANON_KEY` no servidor, além das variáveis públicas usadas pelo navegador.
+
+## Critérios para lançamento comercial
+
+Antes de habilitar vendas para clientes externos:
+
+1. aplique todas as migrações, incluindo `010_saas_idor_hardening.sql`;
+2. configure e teste os segredos das funções Mercado Pago e Supabase;
+3. valide checkout aprovado, pendente, recusado, estorno e duplicidade de webhook;
+4. publique termos de uso, política de privacidade/LGPD e canais de suporte;
+5. execute `pnpm check` e confirme o workflow `quality` sem falhas;
+6. faça um teste de isolamento com dois tenants e usuários de perfis diferentes;
+7. valide backup, restauração, monitoramento e resposta a incidentes.
+
 Consulte `ARQUITETURA_SAC_4.md` para decisões de arquitetura e prioridades.
