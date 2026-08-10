@@ -15,6 +15,8 @@ Crie os ambientes `staging` e `production` em **Settings → Environments**. No 
 | `MERCADO_PAGO_ACCESS_TOKEN` | credencial do provedor para o ambiente |
 | `MERCADO_PAGO_WEBHOOK_SECRET` | validação criptográfica dos webhooks |
 
+Crie também a variável de ambiente `COMMERCIAL_CHECKOUT_ENABLED`. Mantenha `false` até CNPJ, contrato, aceite e pedido estarem conciliados. Para liberar o pagamento, ela deve ser `true` no ambiente e o build do portal deve receber `VITE_COMMERCIAL_CHECKOUT_ENABLED=true`.
+
 Nunca reutilize credenciais produtivas no staging. O Mercado Pago deve usar uma conta ou credenciais de teste na homologação.
 
 ## Execução segura

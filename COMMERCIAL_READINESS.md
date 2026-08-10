@@ -12,6 +12,7 @@ O produto já possui portal comercial, planos, checkout Mercado Pago, autentica�
 - Confiabilidade: testar backup/restauração, observabilidade, alertas, fila/reprocessamento de webhooks e recuperação de desastre.
 - Qualidade: criar testes automatizados para autenticação, autorização, isolamento multiempresa, tickets, anexos, checkout e webhook.
 - Comercial: confirmar preços, impostos, política de cancelamento, usuários excedentes, limites de armazenamento e chamadas de IA.
+- Checkout: permanece bloqueado por padrão até o pedido comercial vincular CNPJ, aceite contratual e pagador; a liberação exige flags independentes no portal e na função.
 - Trial: criar o backoffice comercial e alertas de novos leads; até lá, a triagem da tabela protegida é uma operação interna controlada.
 
 ## Critérios de go-live

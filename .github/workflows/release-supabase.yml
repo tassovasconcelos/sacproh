@@ -37,6 +37,7 @@ jobs:
       PUBLIC_SITE_URL: ${{ secrets.PUBLIC_SITE_URL }}
       MERCADO_PAGO_ACCESS_TOKEN: ${{ secrets.MERCADO_PAGO_ACCESS_TOKEN }}
       MERCADO_PAGO_WEBHOOK_SECRET: ${{ secrets.MERCADO_PAGO_WEBHOOK_SECRET }}
+      COMMERCIAL_CHECKOUT_ENABLED: ${{ vars.COMMERCIAL_CHECKOUT_ENABLED || 'false' }}
     steps:
       - name: Baixar código
         uses: actions/checkout@v6
@@ -76,6 +77,7 @@ jobs:
           PUBLIC_SITE_URL="$PUBLIC_SITE_URL"
           MERCADO_PAGO_ACCESS_TOKEN="$MERCADO_PAGO_ACCESS_TOKEN"
           MERCADO_PAGO_WEBHOOK_SECRET="$MERCADO_PAGO_WEBHOOK_SECRET"
+          COMMERCIAL_CHECKOUT_ENABLED="$COMMERCIAL_CHECKOUT_ENABLED"
           --project-ref "$PROJECT_REF"
 
       - name: Publicar funções comerciais

@@ -24,6 +24,7 @@ for (const path of ['supabase/functions/request-trial/index.ts','supabase/functi
 requireText('supabase/functions/manage-trials/index.ts', /COMMERCIAL_ADMIN_EMAILS/, 'Backoffice precisa de allowlist privada de operadores.');
 requireText('supabase/functions/manage-trials/index.ts', /role_code!=='SUPERADMIN'/, 'Backoffice precisa validar o perfil de plataforma.');
 requireText('supabase/functions/mercadopago-webhook/index.ts', /timingSafeEqual/, 'Webhook precisa comparar a assinatura com proteção temporal.');
+requireText('supabase/functions/mercadopago-checkout/index.ts', /COMMERCIAL_CHECKOUT_ENABLED['"]\)\s*!==\s*['"]true/, 'Checkout deve permanecer bloqueado por padrão.');
 
 requireText('.github/workflows/release-supabase.yml', /environment:\s*\$\{\{ inputs\.target \}\}/, 'Release precisa usar ambiente protegido.');
 requireText('.github/workflows/release-supabase.yml', /db push[^\n]*--dry-run/, 'Release precisa revisar migrações antes da aplicação.');

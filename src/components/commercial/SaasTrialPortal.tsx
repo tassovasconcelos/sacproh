@@ -48,7 +48,13 @@ const requestCheckoutFallback = (plan: Plan) => {
 };
 
 export function SaasTrialPortal() {
+  const checkoutEnabled = (import.meta as any).env?.VITE_COMMERCIAL_CHECKOUT_ENABLED === 'true';
   const requestCheckout = async (plan: Plan) => {
+    if (!checkoutEnabled) {
+      window.alert('A contratação é liberada após validação cadastral e comercial. Envie a solicitação de avaliação para receber a proposta adequada.');
+      document.querySelector('#trial')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
     try {
       await startMercadoPagoCheckout(plan.code);
     } catch (error) {

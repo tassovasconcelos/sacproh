@@ -29,6 +29,9 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json(origin, { error: 'Método não permitido.' }, 405);
 
   try {
+    if (Deno.env.get('COMMERCIAL_CHECKOUT_ENABLED') !== 'true') {
+      return json(origin, { error: 'Checkout disponível somente após validação comercial.' }, 403);
+    }
     const accessToken = Deno.env.get('MERCADO_PAGO_ACCESS_TOKEN');
     const publicSiteUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://apps.sactrial.gritnews.com.br';
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
