@@ -6,7 +6,7 @@ O produto já possui portal comercial, planos, checkout Mercado Pago, autentica�
 
 ## Bloqueadores antes da venda em escala
 
-- Provisionamento: um pagamento aprovado ainda precisa criar ou ativar tenant, assinatura e primeiro administrador de forma idempotente.
+- Provisionamento: o trial aprovado já cria tenant, assinatura e primeiro administrador de forma idempotente; falta conciliar e automatizar a conversão do pagamento aprovado para assinatura anual.
 - Jurídico e LGPD: publicar termos de uso, política de privacidade, contrato, DPA, retenção e processo de atendimento ao titular.
 - Operação: definir suporte, horários, SLA comercial, onboarding, migração assistida, treinamento e escalonamento de incidentes.
 - Confiabilidade: testar backup/restauração, observabilidade, alertas, fila/reprocessamento de webhooks e recuperação de desastre.
@@ -26,4 +26,4 @@ O produto já possui portal comercial, planos, checkout Mercado Pago, autentica�
 
 ## Próxima fase recomendada
 
-Construir o fluxo transacional `pagamento aprovado -> tenant -> assinatura -> administrador -> convite -> onboarding`, acompanhado de testes de integração e painel interno de ativações. Sem esse fluxo, o portal pode captar pagamentos, mas a entrega do serviço ainda depende de operação manual.
+Validar o provisionamento do trial em staging e construir a conciliação `contrato/pedido -> pagamento aprovado -> assinatura anual`, com testes de integração, reprocessamento idempotente e tratamento de estorno. O checkout já capta pagamentos, mas a conversão financeira ainda não deve ativar automaticamente um cliente sem identificação empresarial e aceite contratual confirmados.

@@ -62,7 +62,19 @@ Trials sem atividade por sete dias entram em recuperação comercial. Ao términ
 
 O funil interno fica em `/commercial-trials` no domínio do portal. O acesso exige simultaneamente uma sessão Supabase ativa, perfil `SUPERADMIN` e e-mail presente no segredo `COMMERCIAL_ADMIN_EMAILS` da função `manage-trials`. Configure o segredo como uma lista de e-mails separados por vírgula e nunca exponha essa lista no frontend.
 
-No painel, o operador pode consultar até 200 solicitações recentes, registrar notas, motivo de perda e movimentar a oportunidade pelo funil. Ao ativar o trial, o sistema registra automaticamente o início e o término de 30 dias. A criação do tenant e dos usuários continua sendo uma etapa separada até o provisionamento automatizado.
+No painel, o operador pode consultar até 200 solicitações recentes, registrar notas, motivo de perda e movimentar a oportunidade pelo funil. A ativação controlada registra o período de 30 dias e provisiona o ambiente depois da aprovação comercial.
+
+## Provisionamento controlado
+
+Depois da qualificação, o operador informa o CNPJ, escolhe o plano, move a oportunidade para `TRIAL_APPROVED` e confirma a ativação. O provisionamento cria, em uma operação transacional e idempotente, o tenant e a assinatura de 30 dias; depois convida o contato como primeiro `SUPERADMIN` e vincula os identificadores ao pedido comercial.
+
+Antes de liberar em produção:
+
+- aplique `20260810_trial_provisioning.sql` depois da migração de captação;
+- configure `SAC_APP_URL` na função para o link correto do convite;
+- teste ativação repetida, e-mail já cadastrado, CNPJ duplicado e plano indisponível;
+- confirme o recebimento do convite, a definição de senha e o isolamento do novo tenant;
+- mantenha o pagamento separado do provisionamento até a conciliação entre pedido comercial, contrato e pagador estar validada.
 
 ## Métricas do funil
 
