@@ -86,7 +86,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Multi-Tenant & User Role State
-  const [tenants] = useState<Tenant[]>(mockTenants);
+  const [tenants, setTenants] = useState<Tenant[]>(mockTenants);
   const [currentTenant, setCurrentTenant] = useState<Tenant>(mockTenants[0]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -131,7 +131,8 @@ export default function App() {
       if (!data.session?.user) return;
       const profile = await apiService.getCurrentProfile(data.session.user.id);
       if (profile) {
-        setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
+        const tenant=await apiService.getTenant(profile.tenantId);
+        if(tenant){setCurrentTenant(tenant);setTenants([tenant]);}else setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
         setCurrentUser(profile);
         setIsAdminAuthenticated(['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode));
       }
@@ -247,6 +248,7 @@ export default function App() {
 
   const handleAdminAuthSuccess = (profile: UserProfile) => {
     setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
+    apiService.getTenant(profile.tenantId).then(tenant=>{if(tenant){setCurrentTenant(tenant);setTenants([tenant]);}});
     setCurrentUser(profile);
     const hasAdminAccess = ['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode);
     setIsAdminAuthenticated(hasAdminAccess);
@@ -383,6 +385,7 @@ export default function App() {
                   onCreateOS={handleCreateOS}
                   onUpdateOS={handleUpdateOS}
                   onDeleteOS={handleDeleteOS}
+                  tenant={currentTenant}
                 />
               )}
 
@@ -399,7 +402,7 @@ export default function App() {
               )}
 
               {currentView === 'reports' && (
-                <ExecutiveDashboard tickets={tickets} />
+                <ExecutiveDashboard tickets={tickets} tenant={currentTenant} />
               )}
 
               {currentView === 'users' && (

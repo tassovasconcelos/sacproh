@@ -1,5 +1,5 @@
 import { 
-  Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage
+  Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage, Tenant
 } from '../types';
 import { 
   mockTickets, mockCustomers, mockProducts, mockQualityPlans, mockTechnicalCases, mockLogisticsCases, mockAuditLogs, mockUsers, mockServiceOrders 
@@ -87,6 +87,12 @@ const ticketFromDb = (row: any): Ticket => ({
 });
 
 export const apiService = {
+  async getTenant(tenantId:string):Promise<Tenant|null>{
+    if(!isSupabaseConfigured)return null;
+    const{data,error}=await supabase.from('tenants').select('id,name,trade_name,document,is_active').eq('id',tenantId).single();
+    if(error||!data)return null;
+    return{id:data.id,name:data.name,tradeName:data.trade_name||undefined,document:data.document,isActive:data.is_active};
+  },
   // --- TICKETS ---
   async getTickets(filters?: DashboardFilters): Promise<Ticket[]> {
     if (isSupabaseConfigured) {

@@ -20,6 +20,9 @@ requireText('supabase/migrations/20260811_commercial_orders.sql', /force row lev
 requireText('supabase/migrations/20260811_commercial_orders.sql', /contract_evidence_reference[\s\S]*contract_accepted_at/i, 'Pedido anual precisa manter evidência contratual.');
 requireText('supabase/migrations/20260812_billing_lifecycle.sql', /trg_billing_events_immutable/i, 'Eventos financeiros precisam ser imutáveis.');
 requireText('supabase/migrations/20260812_billing_lifecycle.sql', /dedupe_key text not null unique/i, 'Alertas financeiros precisam ser deduplicados.');
+requireText('supabase/migrations/20260813_tenant_branding.sql', /tenant_id uuid not null unique/i, 'Identidade visual precisa ser isolada por tenant.');
+requireText('supabase/migrations/20260813_tenant_branding.sql', /file_size_limit[\s\S]*allowed_mime_types/i, 'Upload de logo precisa limitar tamanho e formatos.');
+requireText('supabase/migrations/20260813_tenant_branding.sql', /user_role_code\(\)[\s\S]*SUPERADMIN[\s\S]*ADMIN_EMPRESA/i, 'Somente administradores podem alterar a marca.');
 
 for (const path of ['supabase/functions/request-trial/index.ts','supabase/functions/manage-trials/index.ts','supabase/functions/mercadopago-checkout/index.ts']) {
   requireText(path, /allowedOrigins/, 'Função pública precisa de allowlist de origem.');
