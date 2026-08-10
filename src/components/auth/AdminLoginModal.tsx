@@ -141,9 +141,9 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
       <div className="bg-[#0B2343] text-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-700 overflow-hidden text-xs">
         <div className="bg-[#071325] p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <img src="/procirurgica-icon-192.png" alt="" aria-hidden="true" className="w-10 h-10 object-contain" />
+            <img src="/grit-logo.png" alt="" aria-hidden="true" className="h-12 w-28 object-cover object-center" />
             <div>
-              <img src="/procirurgica-logo.png" alt="Procirúrgica" className="h-5 w-auto mb-1.5" />
+              <strong className="mb-1.5 block text-sm tracking-wide text-white">SAC 4.0 · GRIT</strong>
               <h3 className="font-extrabold text-sm text-white">Área Restrita ADM</h3>
               <p className="text-[11px] text-slate-400">Autenticação segura pelo Supabase</p>
             </div>
@@ -189,13 +189,13 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
               <span className="relative block mt-1">
                 <Key className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                 <input type="password" value={passwordConfirmation} onChange={e => setPasswordConfirmation(e.target.value)} required
-                  className="w-full bg-slate-900 border border-slate-700 pl-9 pr-3 py-2.5 rounded-xl text-white outline-none focus:border-[#E51B2B]" />
+                  className="w-full bg-slate-900 border border-slate-700 pl-9 pr-3 py-2.5 rounded-xl text-white outline-none focus:border-[#FF8500]" />
               </span>
             </label>
           )}
           {mode === 'login' && (
             <button type="button" onClick={() => { setMode('request-reset'); setErrorMsg(''); setSuccessMsg(''); }}
-              className="text-[#E51B2B] font-bold hover:underline">
+              className="text-[#FF8500] font-bold hover:underline">
               Esqueci minha senha
             </button>
           )}

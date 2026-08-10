@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 import { TrendingUp, Clock, AlertTriangle, CheckCircle2, Filter, Printer, RefreshCw } from 'lucide-react';
-import { Ticket } from '../../types';
+import { Tenant, Ticket } from '../../types';
+import { BrandedDocumentFooter, BrandedDocumentHeader } from '../documents/BrandedDocumentHeader';
+import { brandingService, defaultBranding } from '../../services/brandingService';
 
-interface ExecutiveDashboardProps { tickets: Ticket[]; }
+interface ExecutiveDashboardProps { tickets: Ticket[]; tenant: Tenant; }
 
 const CLOSED = new Set(['CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT']);
 const STATUS_LABELS: Record<string,string> = {
@@ -11,12 +13,12 @@ const STATUS_LABELS: Record<string,string> = {
   SENT_TO_LOGISTICS:'Logística', WAITING_CUSTOMER:'Aguardando cliente', WAITING_SUPPLIER:'Aguardando fornecedor',
   CLOSED_PROCEDENT:'Encerrado procedente', CLOSED_NON_PROCEDENT:'Encerrado não procedente'
 };
-const COLORS = ['#145EDB','#FF8500','#22A06B','#D92D20','#7C3AED','#0891B2','#64748B'];
-
-export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets }) => {
+export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets, tenant }) => {
   const [period, setPeriod] = useState<'30'|'90'|'365'|'ALL'>('ALL');
   const [status, setStatus] = useState('ALL');
   const [priority, setPriority] = useState('ALL');
+  const [branding,setBranding]=useState({...defaultBranding,tenantId:tenant.id});
+  useEffect(()=>{brandingService.get(tenant.id).then(setBranding).catch(()=>undefined);},[tenant.id]);
 
   const filtered = useMemo(() => {
     const limit = period === 'ALL' ? null : Date.now() - Number(period) * 86400000;
@@ -38,7 +40,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
 
   const categoryData = useMemo(() => (Object.entries(filtered.reduce<Record<string,number>>((acc,t) => {
     const key=t.category || 'Não classificado'; acc[key]=(acc[key]||0)+1; return acc;
-  },{})) as Array<[string,number]>).sort((a,b)=>b[1]-a[1]).map(([name,value],index)=>({name,value,color:COLORS[index%COLORS.length]})),[filtered]);
+  },{})) as Array<[string,number]>).sort((a,b)=>b[1]-a[1]).map(([name,value],index)=>{const colors=[branding.primaryColor,branding.accentColor,branding.secondaryColor,'#22A06B','#D92D20','#7C3AED','#64748B'];return{name,value,color:colors[index%colors.length]};}),[filtered,branding]);
 
   const paretoData = useMemo(() => {
     const total=Math.max(filtered.length,1); let accumulated=0;
@@ -74,6 +76,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
     .sort((a,b) => a.legalDueAt - b.legalDueAt), [filtered]);
 
   return <div className="space-y-5 print:space-y-3">
+    <BrandedDocumentHeader tenant={tenant} title="Relatório Gerencial do SAC" reference={`Emitido em ${new Date().toLocaleString('pt-BR')}`}/>
     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
       <div className="flex flex-col md:flex-row justify-between gap-3"><div><h1 className="text-xl font-bold text-[#10233F]">Relatório Gerencial do SAC</h1>
         <p className="text-xs text-slate-500">Dados reais dos chamados registrados no Supabase · Atualizado em {new Date().toLocaleString('pt-BR')}</p></div>
@@ -106,7 +109,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div className="lg:col-span-2 bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Pareto real por categoria</h3><p className="text-xs text-slate-500 mb-3">Volume e percentual acumulado dos SACs</p><div className="h-64"><ResponsiveContainer><BarChart data={paretoData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="cause" tick={{fontSize:9}}/><YAxis yAxisId="left"/><YAxis yAxisId="right" orientation="right" domain={[0,100]}/><Tooltip/><Bar yAxisId="left" dataKey="count" fill="#145EDB" name="SACs"/><Line yAxisId="right" dataKey="percentage" stroke="#FF8500" name="% acumulado"/></BarChart></ResponsiveContainer></div></div>
+      <div className="lg:col-span-2 bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Pareto real por categoria</h3><p className="text-xs text-slate-500 mb-3">Volume e percentual acumulado dos SACs</p><div className="h-64"><ResponsiveContainer><BarChart data={paretoData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="cause" tick={{fontSize:9}}/><YAxis yAxisId="left"/><YAxis yAxisId="right" orientation="right" domain={[0,100]}/><Tooltip/><Bar yAxisId="left" dataKey="count" fill={branding.primaryColor} name="SACs"/><Line yAxisId="right" dataKey="percentage" stroke={branding.accentColor} name="% acumulado"/></BarChart></ResponsiveContainer></div></div>
       <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Distribuição por categoria</h3><div className="h-64"><ResponsiveContainer><PieChart><Pie data={categoryData} dataKey="value" nameKey="name" outerRadius={80}>{categoryData.map((x,i)=><Cell key={i} fill={x.color}/>)}</Pie><Tooltip/><Legend wrapperStyle={{fontSize:10}}/></PieChart></ResponsiveContainer></div></div>
     </div>
 
@@ -116,5 +119,6 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
     </div>
 
     <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm mb-3">Carga por responsável ou área</h3><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="bg-slate-50"><th className="p-2 text-left">Responsável / área</th><th className="p-2 text-right">Chamados</th><th className="p-2 text-right">Participação</th></tr></thead><tbody>{responsibleData.map(([name,count])=><tr key={name} className="border-t"><td className="p-2">{name}</td><td className="p-2 text-right font-bold">{count}</td><td className="p-2 text-right">{metrics.total?((count/metrics.total)*100).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></div><p className="text-xs text-slate-500 mt-3">Tempo médio de resolução: <strong>{metrics.averageDays===null?'Sem encerramentos':`${metrics.averageDays.toFixed(1)} dias`}</strong></p></div>
+    <BrandedDocumentFooter tenantId={tenant.id}/>
   </div>;
 };

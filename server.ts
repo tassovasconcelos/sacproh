@@ -2,12 +2,61 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
+import type { NextFunction, Request, Response } from 'express';
+
+type AuthenticatedRequest = Request & { authUserId?: string };
+
+const requestBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function apiRateLimit(limit = 30, windowMs = 60_000) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const now = Date.now();
+    const key = req.authUserId || req.ip || 'unknown';
+    const bucket = requestBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      requestBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    if (bucket.count >= limit) {
+      return res.status(429).json({ error: 'Muitas solicitações. Aguarde um minuto e tente novamente.' });
+    }
+    bucket.count += 1;
+    return next();
+  };
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1);
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    next();
+  });
   app.use(express.json({ limit: '10mb' }));
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const authClient = supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    : null;
+
+  const requireAuthenticatedUser = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!authClient) return res.status(503).json({ error: 'Autenticação do servidor não configurada.' });
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+    if (!token) return res.status(401).json({ error: 'Sessão obrigatória.' });
+    const { data, error } = await authClient.auth.getUser(token);
+    if (error || !data.user) return res.status(401).json({ error: 'Sessão inválida ou expirada.' });
+    req.authUserId = data.user.id;
+    return next();
+  };
 
   // Initialize Gemini AI SDK lazily
   const getGeminiClient = () => {
@@ -28,9 +77,15 @@ async function startServer() {
   });
 
   // AI Classification Endpoint
+  app.use('/api/ai', requireAuthenticatedUser, apiRateLimit(20));
+  app.use('/api/import', requireAuthenticatedUser, apiRateLimit(10));
+
   app.post('/api/ai/classify', async (req, res) => {
     try {
-      const { description } = req.body;
+      const description = String(req.body?.description || '').trim();
+      if (!description || description.length > 8_000) {
+        return res.status(400).json({ error: 'O relato deve ter entre 1 e 8.000 caracteres.' });
+      }
       const ai = getGeminiClient();
 
       if (!ai) {
@@ -84,6 +139,7 @@ Relato do cliente:
   app.post('/api/ai/summarize', async (req, res) => {
     try {
       const { ticket } = req.body;
+      if (!ticket || typeof ticket !== 'object') return res.status(400).json({ error: 'Chamado inválido.' });
       const ai = getGeminiClient();
 
       if (!ai) {
@@ -115,6 +171,7 @@ Detalhes:
   app.post('/api/ai/suggest-response', async (req, res) => {
     try {
       const { ticket } = req.body;
+      if (!ticket || typeof ticket !== 'object') return res.status(400).json({ error: 'Chamado inválido.' });
       const ai = getGeminiClient();
 
       if (!ai) {
@@ -141,7 +198,7 @@ Detalhes:
   app.post('/api/import/spreadsheet', (req, res) => {
     try {
       const { rawRows } = req.body; // array of objects or strings
-      if (!rawRows || !Array.isArray(rawRows)) {
+      if (!rawRows || !Array.isArray(rawRows) || rawRows.length > 10_000) {
         return res.status(400).json({ error: 'Invalid rows input' });
       }
 

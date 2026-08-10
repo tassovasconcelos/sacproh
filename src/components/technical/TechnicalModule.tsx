@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Wrench, Plus, FileText, Calendar, DollarSign, CheckCircle2, AlertTriangle, Printer, Search, Clock, Edit3, Trash2 } from 'lucide-react';
-import { TechnicalCase, ServiceOrder, Ticket, UserProfile } from '../../types';
+import { TechnicalCase, ServiceOrder, Tenant, Ticket, UserProfile } from '../../types';
 import { NewServiceOrderModal } from './NewServiceOrderModal';
+import { BrandedDocumentFooter, BrandedDocumentHeader } from '../documents/BrandedDocumentHeader';
 
 interface TechnicalModuleProps {
   cases: TechnicalCase[];
@@ -11,6 +12,7 @@ interface TechnicalModuleProps {
   onCreateOS: (osData: Omit<ServiceOrder, 'id' | 'osNumber' | 'openedAt'>) => void;
   onUpdateOS: (order: ServiceOrder, changes: Partial<ServiceOrder>) => Promise<void>;
   onDeleteOS: (order: ServiceOrder, reason: string) => Promise<void>;
+  tenant: Tenant;
 }
 
 export const TechnicalModule: React.FC<TechnicalModuleProps> = ({
@@ -20,7 +22,8 @@ export const TechnicalModule: React.FC<TechnicalModuleProps> = ({
   users,
   onCreateOS,
   onUpdateOS,
-  onDeleteOS
+  onDeleteOS,
+  tenant
 }) => {
   const [showNewOSModal, setShowNewOSModal] = useState(false);
   const [selectedOS, setSelectedOS] = useState<ServiceOrder | null>(null);
@@ -143,10 +146,11 @@ export const TechnicalModule: React.FC<TechnicalModuleProps> = ({
       {selectedOS && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-slate-200 p-6 space-y-4 text-xs">
+            <BrandedDocumentHeader tenant={tenant} title="Ordem de Serviço" reference={selectedOS.osNumber}/>
             <div className="flex items-center justify-between border-b pb-3">
               <div>
                 <h3 className="font-mono font-bold text-lg text-[#145EDB]">{selectedOS.osNumber}</h3>
-                <p className="text-slate-500 text-[11px]">Ordem de Serviço de Assistência Técnica Procirúrgica</p>
+                <p className="text-slate-500 text-[11px]">Ordem de Serviço de Assistência Técnica · {tenant.tradeName||tenant.name}</p>
               </div>
               <button onClick={() => setSelectedOS(null)} className="p-1 bg-slate-100 rounded-lg font-bold">Fechar</button>
             </div>
@@ -179,6 +183,7 @@ export const TechnicalModule: React.FC<TechnicalModuleProps> = ({
                 <span>Imprimir / PDF</span>
               </button>
             </div>
+            <BrandedDocumentFooter tenantId={tenant.id}/>
           </div>
         </div>
       )}

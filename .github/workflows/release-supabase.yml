@@ -1,0 +1,101 @@
+name: Homologar e publicar Supabase
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Ambiente protegido do GitHub
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
+      operation:
+        description: Apenas revisar ou aplicar a liberação
+        required: true
+        type: choice
+        options: [preview, apply]
+        default: preview
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: ${{ inputs.operation }} · ${{ inputs.target }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      COMMERCIAL_ADMIN_EMAILS: ${{ secrets.COMMERCIAL_ADMIN_EMAILS }}
+      SAC_APP_URL: ${{ secrets.SAC_APP_URL }}
+      PUBLIC_SITE_URL: ${{ secrets.PUBLIC_SITE_URL }}
+      MERCADO_PAGO_ACCESS_TOKEN: ${{ secrets.MERCADO_PAGO_ACCESS_TOKEN }}
+      MERCADO_PAGO_WEBHOOK_SECRET: ${{ secrets.MERCADO_PAGO_WEBHOOK_SECRET }}
+      COMMERCIAL_CHECKOUT_ENABLED: ${{ vars.COMMERCIAL_CHECKOUT_ENABLED || 'false' }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      COMMERCIAL_ALERT_FROM: ${{ secrets.COMMERCIAL_ALERT_FROM }}
+      COMMERCIAL_ALERT_TO: ${{ secrets.COMMERCIAL_ALERT_TO || 'gritsolucoes@gmail.com' }}
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v6
+
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validar configuração protegida
+        shell: bash
+        run: |
+          required=(SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF COMMERCIAL_ADMIN_EMAILS SAC_APP_URL PUBLIC_SITE_URL MERCADO_PAGO_ACCESS_TOKEN MERCADO_PAGO_WEBHOOK_SECRET RESEND_API_KEY COMMERCIAL_ALERT_FROM COMMERCIAL_ALERT_TO)
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then echo "Configuração ausente: $name"; exit 1; fi
+          done
+          case "$PUBLIC_SITE_URL" in https://*) ;; *) echo "PUBLIC_SITE_URL deve usar HTTPS"; exit 1;; esac
+          case "$SAC_APP_URL" in https://*) ;; *) echo "SAC_APP_URL deve usar HTTPS"; exit 1;; esac
+          if [[ ! "$PUBLIC_SITE_URL" =~ ^https://[^/]+$ ]]; then echo "PUBLIC_SITE_URL deve conter somente a origem, sem caminho ou barra final"; exit 1; fi
+
+      - name: Vincular projeto
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      - name: Revisar migrações pendentes
+        run: supabase db push --linked --include-all --dry-run
+
+      - name: Aplicar migrações
+        if: inputs.operation == 'apply'
+        run: supabase db push --linked --include-all
+
+      - name: Configurar segredos das funções
+        if: inputs.operation == 'apply'
+        run: >-
+          supabase secrets set
+          COMMERCIAL_ADMIN_EMAILS="$COMMERCIAL_ADMIN_EMAILS"
+          SAC_APP_URL="$SAC_APP_URL"
+          PUBLIC_SITE_URL="$PUBLIC_SITE_URL"
+          MERCADO_PAGO_ACCESS_TOKEN="$MERCADO_PAGO_ACCESS_TOKEN"
+          MERCADO_PAGO_WEBHOOK_SECRET="$MERCADO_PAGO_WEBHOOK_SECRET"
+          COMMERCIAL_CHECKOUT_ENABLED="$COMMERCIAL_CHECKOUT_ENABLED"
+          RESEND_API_KEY="$RESEND_API_KEY"
+          COMMERCIAL_ALERT_FROM="$COMMERCIAL_ALERT_FROM"
+          COMMERCIAL_ALERT_TO="$COMMERCIAL_ALERT_TO"
+          --project-ref "$PROJECT_REF"
+
+      - name: Publicar funções comerciais
+        if: inputs.operation == 'apply'
+        run: |
+          supabase functions deploy request-trial --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy manage-trials --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy mercadopago-checkout --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy mercadopago-webhook --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy invite-user --project-ref "$PROJECT_REF"
+
+      - name: Testar disponibilidade da captação
+        if: inputs.operation == 'apply'
+        shell: bash
+        run: curl --fail --silent --show-error --request OPTIONS "https://${PROJECT_REF}.supabase.co/functions/v1/request-trial" --header "Origin:${PUBLIC_SITE_URL}" --header "Access-Control-Request-Method:POST"

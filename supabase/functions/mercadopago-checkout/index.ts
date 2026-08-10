@@ -7,6 +7,7 @@ const allowedOrigins = new Set([
   'https://apps.sactrial.gritnews.com.br',
   'https://apps.sacproh.gritnews.com.br',
 ]);
+try { const configured = Deno.env.get('PUBLIC_SITE_URL'); if (configured) allowedOrigins.add(new URL(configured).origin); } catch { /* configuração inválida não amplia o CORS */ }
 
 const plans = {
   START: { name: 'SAC Start', annual: 5388, setup: 1490, seats: 5 },
@@ -28,24 +29,35 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json(origin, { error: 'Método não permitido.' }, 405);
 
   try {
+    if (Deno.env.get('COMMERCIAL_CHECKOUT_ENABLED') !== 'true') {
+      return json(origin, { error: 'Checkout disponível somente após validação comercial.' }, 403);
+    }
     const accessToken = Deno.env.get('MERCADO_PAGO_ACCESS_TOKEN');
     const publicSiteUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://apps.sactrial.gritnews.com.br';
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     if (!accessToken || !supabaseUrl) return json(origin, { error: 'Pagamento ainda não configurado.' }, 503);
 
     const payload = await req.json();
-    const planCode = String(payload?.planCode || '').toUpperCase() as keyof typeof plans;
+    const orderToken = String(payload?.orderToken || '');
+    if (!/^[0-9a-f-]{36}$/i.test(orderToken)) return json(origin, { error: 'Pedido comercial inválido.' }, 400);
+    const admin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: order, error: orderError } = await admin.from('commercial_orders').select('*').eq('checkout_token', orderToken).single();
+    if (orderError || !order || !['APPROVED', 'PAYMENT_PENDING'].includes(order.status) || !order.contract_accepted_at) {
+      return json(origin, { error: 'Pedido não está liberado para pagamento.' }, 403);
+    }
+    if (order.checkout_url && order.status === 'PAYMENT_PENDING') return json(origin, { checkoutUrl: order.checkout_url, preferenceId: order.checkout_preference_id });
+    const planCode = String(order.plan_code) as keyof typeof plans;
     const plan = plans[planCode];
     if (!plan) return json(origin, { error: 'Plano inválido.' }, 400);
 
-    const orderReference = crypto.randomUUID();
+    const orderReference = order.id;
     const preference = {
       items: [
         { id: `${planCode}-ANUAL`, title: `${plan.name} - licença de 12 meses`, quantity: 1, currency_id: 'BRL', unit_price: plan.annual },
         { id: `${planCode}-SETUP`, title: `${plan.name} - setup de implantação`, quantity: 1, currency_id: 'BRL', unit_price: plan.setup },
       ],
       external_reference: orderReference,
-      metadata: { plan_code: planCode, seats: plan.seats, billing_period_months: 12 },
+      metadata: { order_id: order.id, tenant_id: order.tenant_id, plan_code: planCode, seats: plan.seats, billing_period_months: 12 },
       back_urls: {
         success: `${publicSiteUrl}/?pagamento=aprovado`,
         pending: `${publicSiteUrl}/?pagamento=pendente`,
@@ -61,7 +73,7 @@ Deno.serve(async (req) => {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': orderReference,
+        'X-Idempotency-Key': `commercial-order-${orderReference}`,
       },
       body: JSON.stringify(preference),
     });
@@ -71,9 +83,12 @@ Deno.serve(async (req) => {
       return json(origin, { error: 'Não foi possível criar o checkout.' }, 502);
     }
 
+    const { error: saveError } = await admin.from('commercial_orders').update({ status: 'PAYMENT_PENDING', checkout_preference_id: result.id, checkout_url: result.init_point, updated_at: new Date().toISOString() }).eq('id', order.id);
+    if (saveError) throw saveError;
     return json(origin, { checkoutUrl: result.init_point, preferenceId: result.id });
   } catch (error) {
     console.error('Checkout error', error instanceof Error ? error.message : error);
     return json(origin, { error: 'Erro interno ao iniciar o pagamento.' }, 500);
   }
 });
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';

@@ -1,10 +1,17 @@
 import { 
-  Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage
+  Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage, Tenant
 } from '../types';
 import { 
   mockTickets, mockCustomers, mockProducts, mockQualityPlans, mockTechnicalCases, mockLogisticsCases, mockAuditLogs, mockUsers, mockServiceOrders 
 } from '../lib/mockData';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+
+const authenticatedJsonHeaders = async (): Promise<Record<string, string>> => {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error('Entre novamente para usar os recursos inteligentes.');
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+};
 
 // In-Memory store for preview mode when Supabase is not connected
 let localTickets = [...mockTickets];
@@ -80,6 +87,12 @@ const ticketFromDb = (row: any): Ticket => ({
 });
 
 export const apiService = {
+  async getTenant(tenantId:string):Promise<Tenant|null>{
+    if(!isSupabaseConfigured)return null;
+    const{data,error}=await supabase.from('tenants').select('id,name,trade_name,document,is_active').eq('id',tenantId).single();
+    if(error||!data)return null;
+    return{id:data.id,name:data.name,tradeName:data.trade_name||undefined,document:data.document,isActive:data.is_active};
+  },
   // --- TICKETS ---
   async getTickets(filters?: DashboardFilters): Promise<Ticket[]> {
     if (isSupabaseConfigured) {
@@ -679,7 +692,7 @@ export const apiService = {
     try {
       const res = await fetch('/api/ai/classify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authenticatedJsonHeaders(),
         body: JSON.stringify({ description })
       });
       if (res.ok) {
@@ -719,7 +732,7 @@ export const apiService = {
     try {
       const res = await fetch('/api/ai/summarize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authenticatedJsonHeaders(),
         body: JSON.stringify({ ticket })
       });
       if (res.ok) {
@@ -737,7 +750,7 @@ export const apiService = {
     try {
       const res = await fetch('/api/ai/suggest-response', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authenticatedJsonHeaders(),
         body: JSON.stringify({ ticket })
       });
       if (res.ok) {
