@@ -18,6 +18,8 @@ requireText('supabase/migrations/20260810_trial_provisioning.sql', /revoke all o
 requireText('supabase/migrations/20260810_trial_provisioning.sql', /grant execute on function[\s\S]*service_role/i, 'Somente service_role deve executar o provisionamento.');
 requireText('supabase/migrations/20260811_commercial_orders.sql', /force row level security/i, 'Pedidos comerciais precisam forçar RLS.');
 requireText('supabase/migrations/20260811_commercial_orders.sql', /contract_evidence_reference[\s\S]*contract_accepted_at/i, 'Pedido anual precisa manter evidência contratual.');
+requireText('supabase/migrations/20260812_billing_lifecycle.sql', /trg_billing_events_immutable/i, 'Eventos financeiros precisam ser imutáveis.');
+requireText('supabase/migrations/20260812_billing_lifecycle.sql', /dedupe_key text not null unique/i, 'Alertas financeiros precisam ser deduplicados.');
 
 for (const path of ['supabase/functions/request-trial/index.ts','supabase/functions/manage-trials/index.ts','supabase/functions/mercadopago-checkout/index.ts']) {
   requireText(path, /allowedOrigins/, 'Função pública precisa de allowlist de origem.');
@@ -27,6 +29,7 @@ requireText('supabase/functions/manage-trials/index.ts', /COMMERCIAL_ADMIN_EMAIL
 requireText('supabase/functions/manage-trials/index.ts', /role_code!=='SUPERADMIN'/, 'Backoffice precisa validar o perfil de plataforma.');
 requireText('supabase/functions/mercadopago-webhook/index.ts', /timingSafeEqual/, 'Webhook precisa comparar a assinatura com proteção temporal.');
 requireText('supabase/functions/mercadopago-webhook/index.ts', /paymentMatchesOrder/, 'Pagamento aprovado precisa ser conciliado com o pedido.');
+requireText('supabase/functions/mercadopago-webhook/index.ts', /charged_back[\s\S]*SUSPENDED/, 'Chargeback precisa suspender a assinatura.');
 requireText('supabase/functions/mercadopago-checkout/index.ts', /COMMERCIAL_CHECKOUT_ENABLED['"]\)\s*!==\s*['"]true/, 'Checkout deve permanecer bloqueado por padrão.');
 
 requireText('.github/workflows/release-supabase.yml', /environment:\s*\$\{\{ inputs\.target \}\}/, 'Release precisa usar ambiente protegido.');

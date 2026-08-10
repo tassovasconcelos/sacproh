@@ -82,6 +82,12 @@ Com o trial provisionado, o operador acessa `/commercial-orders`, seleciona a em
 
 O checkout aceita somente o token desse pedido. Depois do pagamento, o webhook compara identificadores, plano, tenant, valor e moeda. Divergências entram em `PAYMENT_REVIEW`; somente uma correspondência integral converte a assinatura do tenant para `ACTIVE` por 12 meses. O processamento repetido do mesmo pagamento não amplia o período nem duplica o pedido.
 
+## Exceções financeiras
+
+Cada mudança recebida do provedor gera um evento financeiro imutável e idempotente. Rejeições e cancelamentos geram alerta de acompanhamento; reembolso parcial suspende a assinatura para revisão; estorno total cancela a assinatura; chargeback suspende o acesso imediatamente. Os alertas ficam em `/commercial-alerts` e precisam ser reconhecidos pelo operador.
+
+O reconhecimento confirma que uma pessoa assumiu o tratamento, mas não resolve automaticamente a ocorrência. A reativação exige comprovação financeira e deve gerar um novo evento ou procedimento administrativo auditável.
+
 ## Métricas do funil
 
 - Leads por origem e segmento.

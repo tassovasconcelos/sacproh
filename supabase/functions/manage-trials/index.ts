@@ -38,6 +38,14 @@ Deno.serve(async req=>{
       if(body.status&&allowedStatuses.has(body.status))query=query.eq('status',body.status);
       const {data,error}=await query;if(error)throw error;return response(origin,{items:data});
     }
+    if(body.action==='list_alerts'){
+      const {data,error}=await admin.from('commercial_alerts').select('id,severity,alert_type,message,status,created_at,order_id').eq('status','OPEN').order('created_at',{ascending:false}).limit(100);
+      if(error)throw error;return response(origin,{items:data});
+    }
+    if(body.action==='acknowledge_alert'){
+      const alertId=clean(body.id,40);if(!/^[0-9a-f-]{36}$/i.test(alertId))return response(origin,{error:'Alerta inválido.'},400);
+      const {error}=await admin.from('commercial_alerts').update({status:'ACKNOWLEDGED'}).eq('id',alertId);if(error)throw error;return response(origin,{ok:true});
+    }
     if(body.action==='update'){
       const id=clean(body.id,40), status=clean(body.status,30);
       if(!/^[0-9a-f-]{36}$/i.test(id)||!allowedStatuses.has(status))return response(origin,{error:'Atualização inválida.'},400);

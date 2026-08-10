@@ -9,6 +9,7 @@ export type CommercialTrial = {
   trial_starts_at?: string | null; trial_ends_at?: string | null; created_at: string; updated_at: string;
   provisioned_tenant_id?: string | null; provisioned_admin_id?: string | null; provisioned_at?: string | null;
 };
+export type CommercialAlert = { id:string; order_id?:string|null; severity:'INFO'|'WARNING'|'CRITICAL'; alert_type:string; message:string; status:string; created_at:string };
 
 async function invoke(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('manage-trials', { body });
@@ -32,4 +33,6 @@ export const commercialTrialService = {
   async prepareOrder(id: string, contractEvidenceReference: string, contractVersion: string) {
     return invoke({ action: 'prepare_order', id, contractEvidenceReference, contractVersion }) as Promise<{ paymentLink: string }>;
   },
+  async listAlerts() { const data=await invoke({action:'list_alerts'});return (data.items||[]) as CommercialAlert[]; },
+  async acknowledgeAlert(id:string) { await invoke({action:'acknowledge_alert',id}); },
 };
