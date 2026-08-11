@@ -1,0 +1,96 @@
+name: Publicar backend Supabase
+
+"on":
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Operacao de homologacao
+        required: true
+        type: choice
+        options:
+          - preview
+          - apply
+        default: preview
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-backend-production
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      COMMERCIAL_ADMIN_EMAILS: ${{ secrets.COMMERCIAL_ADMIN_EMAILS }}
+      SAC_APP_URL: ${{ secrets.SAC_APP_URL }}
+      PUBLIC_SITE_URL: ${{ secrets.PUBLIC_SITE_URL }}
+      COMMERCIAL_CHECKOUT_ENABLED: "false"
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v6
+
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validar configuracao
+        shell: bash
+        run: |
+          required=(
+            SUPABASE_ACCESS_TOKEN
+            SUPABASE_DB_PASSWORD
+            PROJECT_REF
+            COMMERCIAL_ADMIN_EMAILS
+            SAC_APP_URL
+            PUBLIC_SITE_URL
+          )
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "Configuracao ausente: $name"
+              exit 1
+            fi
+          done
+
+      - name: Vincular projeto
+        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Revisar migracoes
+        run: supabase db push --linked --include-all --dry-run
+
+      - name: Aplicar migracoes
+        if: inputs.operation == 'apply'
+        run: supabase db push --linked --include-all
+
+      - name: Configurar segredos das funcoes
+        if: inputs.operation == 'apply'
+        shell: bash
+        run: |
+          supabase secrets set \
+            "COMMERCIAL_ADMIN_EMAILS=$COMMERCIAL_ADMIN_EMAILS" \
+            "SAC_APP_URL=$SAC_APP_URL" \
+            "PUBLIC_SITE_URL=$PUBLIC_SITE_URL" \
+            "COMMERCIAL_CHECKOUT_ENABLED=$COMMERCIAL_CHECKOUT_ENABLED" \
+            --project-ref "$PROJECT_REF"
+
+      - name: Publicar funcoes comerciais
+        if: inputs.operation == 'apply'
+        run: |
+          supabase functions deploy request-trial --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy manage-trials --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy invite-user --project-ref "$PROJECT_REF"
+
+      - name: Testar disponibilidade
+        if: inputs.operation == 'apply'
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --request OPTIONS \
+            "https://${PROJECT_REF}.supabase.co/functions/v1/manage-trials" \
+            --header "Origin: ${PUBLIC_SITE_URL}" \
+            --header "Access-Control-Request-Method: POST"
