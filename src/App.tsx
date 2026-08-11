@@ -6,6 +6,7 @@ import { NewTicketModal } from './components/tickets/NewTicketModal';
 import { TicketDetailView } from './components/tickets/TicketDetailView';
 const ExecutiveDashboard = lazy(() => import('./components/dashboard/ExecutiveDashboard').then(module => ({ default: module.ExecutiveDashboard })));
 const QualityModule = lazy(() => import('./components/quality/QualityModule').then(module => ({ default: module.QualityModule })));
+const RiskManagement = lazy(() => import('./components/risk/RiskManagement').then(module => ({ default: module.RiskManagement })));
 const TechnicalModule = lazy(() => import('./components/technical/TechnicalModule').then(module => ({ default: module.TechnicalModule })));
 const LogisticsModule = lazy(() => import('./components/logistics/LogisticsModule').then(module => ({ default: module.LogisticsModule })));
 const SpreadsheetImporter = lazy(() => import('./components/import/SpreadsheetImporter').then(module => ({ default: module.SpreadsheetImporter })));
@@ -309,6 +310,7 @@ export default function App() {
             setShowAdminLoginModal(true);
           }}
           onGoToPortal={() => navigateToPortal()}
+          currentUserRole={currentUser.roleCode}
         />
 
         {/* View Workspace Content Area */}
@@ -347,6 +349,10 @@ export default function App() {
                   plans={qualityPlans}
                   onCreatePlan={handleCreateQualityPlan}
                 />
+              )}
+
+              {currentView === 'risk' && (
+                <RiskManagement tenant={currentTenant} currentUser={currentUser} tickets={tickets} products={products} />
               )}
 
               {currentView === 'technical' && (

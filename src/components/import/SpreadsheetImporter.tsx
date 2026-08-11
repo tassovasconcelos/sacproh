@@ -50,7 +50,7 @@ export const SpreadsheetImporter: React.FC<SpreadsheetImporterProps> = ({ curren
         const header = headers.find(h => names.includes(keyOf(h)));
         if (header) mapping[field] = header;
       }
-      const missing = ['protocol', 'customerName', 'description', 'productName'].filter(k => !mapping[k]);
+      const missing = ['protocol', 'customerName', 'description', 'productName', 'lotNumber'].filter(k => !mapping[k]);
       if (missing.length) throw new Error(`Colunas obrigatórias não identificadas: ${missing.join(', ')}.`);
 
       const grouped = new Map<string, HistoricalImportTicket>();
@@ -65,6 +65,8 @@ export const SpreadsheetImporter: React.FC<SpreadsheetImporterProps> = ({ curren
           lotNumber: normalize(row[mapping.lotNumber]),
           serialNumber: normalize(row[mapping.serialNumber])
         };
+        if (!item.productName) validation.push(`Linha ${index + 2}: produto vazio.`);
+        if (!item.lotNumber) validation.push(`Linha ${index + 2}: lote vazio.`);
         const existing = grouped.get(protocol);
         if (existing) existing.items.push(item);
         else grouped.set(protocol, {

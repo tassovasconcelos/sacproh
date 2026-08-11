@@ -74,7 +74,7 @@ const ticketFromDb = (row: any): Ticket => ({
   finalOpinion: row.final_opinion || undefined, finalProcedency: row.final_procedency || undefined,
   createdBy: row.created_by, createdByName: row.created_by_name || 'Usuário do SAC', createdAt: row.created_at, updatedAt: row.updated_at,
   items: (row.items || []).map((i:any) => ({ id:i.id, ticketId:i.ticket_id, productId:i.product_id || undefined,
-    productName:i.product_name, sku:i.sku || undefined, quantity:i.quantity, serialNumber:i.serial_number || undefined,
+    productName:i.product_name, productModel:i.product_model || undefined, sku:i.sku || undefined, quantity:i.quantity, serialNumber:i.serial_number || undefined,
     lotNumber:i.lot_number || undefined, expirationDate:i.expiration_date || undefined, anvisaRegister:i.anvisa_register || undefined })),
   commentsCount: 0, attachmentsCount: 0
 });
@@ -169,10 +169,11 @@ export const apiService = {
             ticket_id: data.id,
             product_id: item.productId || null,
             product_name: item.productName,
+            product_model: item.productModel || null,
             sku: item.sku || null,
             quantity: item.quantity,
             serial_number: item.serialNumber || null,
-            lot_number: item.lotNumber || null,
+            lot_number: item.lotNumber?.trim(),
             expiration_date: item.expirationDate || null,
             anvisa_register: item.anvisaRegister || null
           })));
