@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   LayoutDashboard, Ticket, CheckSquare2, Wrench, Truck, UploadCloud, 
-  BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe 
+  BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe, ScanSearch
 } from 'lucide-react';
 
 export type NavView = 
@@ -14,6 +14,7 @@ export type NavView =
   | 'import' 
   | 'knowledge' 
   | 'reports' 
+  | 'traceability'
   | 'users' 
   | 'settings' 
   | 'audit';
@@ -43,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'logistics', label: 'Logística & Coletas', icon: <Truck className="w-4 h-4" /> },
     { id: 'knowledge', label: 'Base de Conhecimento', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'reports', label: 'Relatórios Gerenciais', icon: <BarChart3 className="w-4 h-4" /> },
+    { id: 'traceability', label: 'Rastreabilidade & Lotes', icon: <ScanSearch className="w-4 h-4" /> },
   ];
 
   const adminMenuItems: { id: NavView; label: string; icon: React.ReactNode }[] = [

@@ -70,6 +70,44 @@ export interface Product {
   anvisaRegister?: string;
   supplierName?: string;
   countryOrigin?: string;
+  brand?: string;
+  manufacturerName?: string;
+  importerName?: string;
+  distributorName?: string;
+}
+
+export type ProductLotStatus = 'RELEASED' | 'QUARANTINE' | 'BLOCKED' | 'RECALL' | 'EXHAUSTED';
+
+export interface ProductLot {
+  id: string;
+  tenantId: string;
+  productId: string;
+  lotNumber: string;
+  manufacturingDate?: string;
+  expirationDate?: string;
+  receivedQuantity: number;
+  soldQuantity: number;
+  stockQuantity: number;
+  status: ProductLotStatus;
+  supplierDocument?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LotAction {
+  id: string;
+  tenantId: string;
+  productLotId: string;
+  actionType: 'MONITOR' | 'QUARANTINE' | 'BLOCK' | 'RECALL';
+  status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  reason: string;
+  ownerName: string;
+  dueDate?: string;
+  affectedCustomers: number;
+  affectedUnits: number;
+  createdAt: string;
+  completedAt?: string;
 }
 
 export interface Carrier {
@@ -117,8 +155,13 @@ export interface TicketItem {
   quantity: number;
   serialNumber?: string;
   lotNumber?: string;
+  manufacturingDate?: string;
   expirationDate?: string;
   anvisaRegister?: string;
+  manufacturerName?: string;
+  importerName?: string;
+  distributorName?: string;
+  retailerName?: string;
 }
 
 export interface TicketStatusHistory {

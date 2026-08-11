@@ -54,13 +54,15 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     quantity: number;
     serialNumber: string;
     lotNumber: string;
+    expirationDate: string;
   }[]>([
     {
       productId: products[0]?.id || '',
       productName: products[0]?.name || 'Bisturi Eletrônico',
       quantity: 1,
       serialNumber: '',
-      lotNumber: ''
+      lotNumber: '',
+      expirationDate: ''
     }
   ]);
 
@@ -100,7 +102,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         productName: products[0]?.name || 'Novo Produto',
         quantity: 1,
         serialNumber: '',
-        lotNumber: ''
+        lotNumber: '',
+        expirationDate: ''
       }
     ]);
   };
@@ -170,7 +173,11 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         productName: it.productName,
         quantity: it.quantity,
         serialNumber: it.serialNumber,
-        lotNumber: it.lotNumber
+        lotNumber: it.lotNumber,
+        expirationDate: it.expirationDate || undefined,
+        manufacturerName: products.find(product => product.id === it.productId)?.manufacturerName,
+        importerName: products.find(product => product.id === it.productId)?.importerName,
+        distributorName: products.find(product => product.id === it.productId)?.distributorName
       }))
       };
 
@@ -398,7 +405,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                         </select>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         <div>
                           <label className="block text-slate-600 font-semibold mb-1">Qtd</label>
                           <input
@@ -411,6 +418,19 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                               setItems(copy);
                             }}
                             className="w-full bg-white border border-slate-300 rounded-lg p-1.5 font-bold text-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-600 font-semibold mb-1">Validade</label>
+                          <input
+                            type="date"
+                            value={it.expirationDate}
+                            onChange={(e) => {
+                              const copy = [...items];
+                              copy[idx].expirationDate = e.target.value;
+                              setItems(copy);
+                            }}
+                            className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-slate-900"
                           />
                         </div>
                         <div>
