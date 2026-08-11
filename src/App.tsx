@@ -21,6 +21,7 @@ const CommercialAlertsAdmin = lazy(() => import('./components/commercial/Commerc
 const CommercialCustomersAdmin = lazy(() => import('./components/commercial/CommercialCustomersAdmin').then(module => ({ default: module.CommercialCustomersAdmin })));
 const MarketingAnalyticsAdmin = lazy(() => import('./components/commercial/MarketingAnalyticsAdmin').then(module => ({ default: module.MarketingAnalyticsAdmin })));
 const PlatformAdmin = lazy(() => import('./components/commercial/PlatformAdmin').then(module => ({ default: module.PlatformAdmin })));
+const RegulatoryReports = lazy(() => import('./components/regulatory/RegulatoryReports').then(module => ({ default: module.RegulatoryReports })));
 
 const ModuleLoading = () => <div className="min-h-[240px] flex items-center justify-center text-sm font-semibold text-slate-500">Carregando módulo...</div>;
 
@@ -368,6 +369,7 @@ export default function App() {
             setShowAdminLoginModal(true);
           }}
           onGoToPortal={() => navigateToPortal()}
+          currentUserRole={currentUser.roleCode}
         />
 
         {/* View Workspace Content Area */}
@@ -439,6 +441,10 @@ export default function App() {
 
               {currentView === 'traceability' && (
                 <TraceabilityIntelligence tickets={tickets} products={products} tenantId={currentTenant.id} userRole={currentUser.roleCode} />
+              )}
+
+              {currentView === 'regulatory' && (
+                <RegulatoryReports tenant={currentTenant} currentUser={currentUser} tickets={tickets} products={products} />
               )}
 
               {currentView === 'users' && (

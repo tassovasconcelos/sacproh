@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   LayoutDashboard, Ticket, CheckSquare2, Wrench, Truck, UploadCloud, 
-  BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe, ScanSearch
+  BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe, ScanSearch, ClipboardCheck
 } from 'lucide-react';
 
 export type NavView = 
@@ -15,6 +15,7 @@ export type NavView =
   | 'knowledge' 
   | 'reports' 
   | 'traceability'
+  | 'regulatory'
   | 'users' 
   | 'settings' 
   | 'audit';
@@ -26,6 +27,7 @@ interface SidebarProps {
   isAdminAuthenticated: boolean;
   onOpenAdminLogin: () => void;
   onGoToPortal: () => void;
+  currentUserRole: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -34,7 +36,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   openTicketsCount,
   isAdminAuthenticated,
   onOpenAdminLogin,
-  onGoToPortal
+  onGoToPortal,
+  currentUserRole
 }) => {
   const opMenuItems: { id: NavView; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'dashboard', label: 'Dashboard Executivo', icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -45,6 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'knowledge', label: 'Base de Conhecimento', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'reports', label: 'Relatórios Gerenciais', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'traceability', label: 'Rastreabilidade & Lotes', icon: <ScanSearch className="w-4 h-4" /> },
+    ...(currentUserRole === 'RESPONSAVEL_TECNICA' ? [{ id: 'regulatory' as NavView, label: 'Relatórios Anvisa & Inmetro', icon: <ClipboardCheck className="w-4 h-4" /> }] : []),
   ];
 
   const adminMenuItems: { id: NavView; label: string; icon: React.ReactNode }[] = [
