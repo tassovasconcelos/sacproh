@@ -22,6 +22,7 @@ const CommercialCustomersAdmin = lazy(() => import('./components/commercial/Comm
 const MarketingAnalyticsAdmin = lazy(() => import('./components/commercial/MarketingAnalyticsAdmin').then(module => ({ default: module.MarketingAnalyticsAdmin })));
 const PlatformAdmin = lazy(() => import('./components/commercial/PlatformAdmin').then(module => ({ default: module.PlatformAdmin })));
 const RegulatoryReports = lazy(() => import('./components/regulatory/RegulatoryReports').then(module => ({ default: module.RegulatoryReports })));
+const RiskManagement = lazy(() => import('./components/risk/RiskManagement').then(module => ({ default: module.RiskManagement })));
 
 const ModuleLoading = () => <div className="min-h-[240px] flex items-center justify-center text-sm font-semibold text-slate-500">Carregando módulo...</div>;
 
@@ -445,6 +446,10 @@ export default function App() {
 
               {currentView === 'regulatory' && (
                 <RegulatoryReports tenant={currentTenant} currentUser={currentUser} tickets={tickets} products={products} />
+              )}
+
+              {currentView === 'risk' && (
+                <RiskManagement tenant={currentTenant} currentUser={currentUser} tickets={tickets} products={products} />
               )}
 
               {currentView === 'users' && (

@@ -15,7 +15,8 @@ export type PlatformUser={id:string;tenant_id:string;full_name:string;email:stri
 export type UsageArea={area:string;views:number;users:number};
 export type PlatformEngagement={total_sessions:number;total_area_views:number;total_record_events:number;active_users_7d:number;active_users_30d:number;areas:UsageArea[]};
 export type PlatformOrder={id:string;tenant_id:string;status:string;plan_code:string;expected_amount:number;currency:string;last_payment_status?:string|null;created_at:string;updated_at:string};
-export type PlatformOverview={trials:CommercialTrial[];subscriptions:CommercialCustomer[];orders:PlatformOrder[];alerts:CommercialAlert[];users:PlatformUser[];engagement:PlatformEngagement};
+export type PlatformRiskSummary={tenant_id:string;open_risks:number;critical_risks:number;pending_notifications:number;overdue_actions:number;units_sold:number;occurrences_ppm:number};
+export type PlatformOverview={trials:CommercialTrial[];subscriptions:CommercialCustomer[];orders:PlatformOrder[];alerts:CommercialAlert[];users:PlatformUser[];engagement:PlatformEngagement;risks:PlatformRiskSummary[]};
 
 async function invoke(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('manage-trials', { body });

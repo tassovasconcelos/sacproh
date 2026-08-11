@@ -36,7 +36,7 @@ Deno.serve(async req=>{
     const body=await req.json();
     if(body.action==='platform_overview'){
       const since30=new Date(Date.now()-30*86400000).toISOString();
-      const [{data:trials,error:trialsError},{data:subscriptions,error:subscriptionsError},{data:orders,error:ordersError},{data:alerts,error:alertsError},{data:profiles,error:profilesError},{data:usage,error:usageError},{data:authUsers,error:authUsersError}]=await Promise.all([
+      const [{data:trials,error:trialsError},{data:subscriptions,error:subscriptionsError},{data:orders,error:ordersError},{data:alerts,error:alertsError},{data:profiles,error:profilesError},{data:usage,error:usageError},{data:authUsers,error:authUsersError},{data:riskCases,error:riskError},{data:riskActions,error:riskActionsError},{data:salesVolumes,error:salesError},{data:ticketVolumes,error:ticketError}]=await Promise.all([
         admin.from('commercial_trial_requests').select('id,status,created_at,trial_ends_at,company_name,work_email,segment,provisioned_tenant_id').order('created_at',{ascending:false}).limit(200),
         admin.from('tenant_subscriptions').select('id,tenant_id,status,seat_limit,trial_ends_at,current_period_end,billing_email,tenant:tenants(name,trade_name,document,is_active),plan:saas_plans(code,name,included_seats)').order('updated_at',{ascending:false}).limit(300),
         admin.from('commercial_orders').select('id,tenant_id,status,plan_code,expected_amount,currency,last_payment_status,created_at,updated_at').order('created_at',{ascending:false}).limit(200),
@@ -44,8 +44,12 @@ Deno.serve(async req=>{
         admin.from('profiles').select('id,tenant_id,full_name,email,role_code,is_active,created_at,tenant:tenants(name,trade_name)').order('created_at',{ascending:false}).limit(1000),
         admin.from('platform_usage_events').select('user_id,area,event_type,occurred_at').gte('occurred_at',since30).order('occurred_at',{ascending:false}).limit(10000),
         admin.auth.admin.listUsers({page:1,perPage:1000}),
+        admin.from('risk_cases').select('tenant_id,status,residual_score,regulatory_notification_required,notification_status').limit(10000),
+        admin.from('risk_actions').select('tenant_id,status,when_due').limit(10000),
+        admin.from('sales_volume_records').select('tenant_id,units_sold').limit(10000),
+        admin.from('tickets').select('tenant_id').limit(10000),
       ]);
-      const firstError=trialsError||subscriptionsError||ordersError||alertsError||profilesError||usageError||authUsersError;if(firstError)throw firstError;
+      const firstError=trialsError||subscriptionsError||ordersError||alertsError||profilesError||usageError||authUsersError||riskError||riskActionsError||salesError||ticketError;if(firstError)throw firstError;
       const authMap=new Map((authUsers?.users||[]).map(item=>[item.id,item]));
       const userStats=new Map<string,{area_views:number;record_events:number;last_activity_at:string|null;areas:Map<string,number>}>();
       const areaStats=new Map<string,{views:number;users:Set<string>}>();
@@ -56,7 +60,9 @@ Deno.serve(async req=>{
         if(!stat.last_activity_at||event.occurred_at>stat.last_activity_at)stat.last_activity_at=event.occurred_at;userStats.set(event.user_id,stat);active30.add(event.user_id);if(new Date(event.occurred_at).getTime()>=sevenDaysAgo)active7.add(event.user_id);}
       const enrichedUsers=(profiles||[]).map(profile=>{const stats=userStats.get(profile.id),authUser=authMap.get(profile.id);const topArea=stats?[...stats.areas.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||null:null;return{...profile,last_sign_in_at:authUser?.last_sign_in_at||null,sign_in_count:Number(authUser?.user_metadata?.sign_in_count||0),area_views:stats?.area_views||0,record_events:stats?.record_events||0,last_activity_at:stats?.last_activity_at||null,top_area:topArea};});
       const engagement={total_sessions:(usage||[]).filter(item=>item.event_type==='SESSION_START').length,total_area_views:(usage||[]).filter(item=>item.event_type==='AREA_VIEW').length,total_record_events:(usage||[]).filter(item=>item.event_type==='RECORD_CREATED'||item.event_type==='RECORD_UPDATED').length,active_users_7d:active7.size,active_users_30d:active30.size,areas:[...areaStats.entries()].map(([area,value])=>({area,views:value.views,users:value.users.size})).sort((a,b)=>b.views-a.views)};
-      return response(origin,{trials:trials||[],subscriptions:subscriptions||[],orders:orders||[],alerts:alerts||[],users:enrichedUsers,engagement});
+      const tenantIds=new Set([...(riskCases||[]).map(item=>item.tenant_id),...(salesVolumes||[]).map(item=>item.tenant_id)]);
+      const risks=[...tenantIds].map(tenantId=>{const tenantRisks=(riskCases||[]).filter(item=>item.tenant_id===tenantId),tenantActions=(riskActions||[]).filter(item=>item.tenant_id===tenantId),units=(salesVolumes||[]).filter(item=>item.tenant_id===tenantId).reduce((sum,item)=>sum+Number(item.units_sold||0),0),occurrences=(ticketVolumes||[]).filter(item=>item.tenant_id===tenantId).length;return{tenant_id:tenantId,open_risks:tenantRisks.filter(item=>item.status!=='CLOSED').length,critical_risks:tenantRisks.filter(item=>item.status!=='CLOSED'&&Number(item.residual_score)>=15).length,pending_notifications:tenantRisks.filter(item=>item.regulatory_notification_required&&!['SUBMITTED','ACKNOWLEDGED','CLOSED'].includes(item.notification_status)).length,overdue_actions:tenantActions.filter(item=>!['DONE','CANCELLED'].includes(item.status)&&item.when_due<new Date().toISOString().slice(0,10)).length,units_sold:units,occurrences_ppm:units?Math.round(occurrences/units*1000000):0};});
+      return response(origin,{trials:trials||[],subscriptions:subscriptions||[],orders:orders||[],alerts:alerts||[],users:enrichedUsers,engagement,risks});
     }
     if(body.action==='update_platform_user'){
       const profileId=clean(body.id,40),roleCode=clean(body.roleCode,40).toUpperCase(),isActive=body.isActive;
