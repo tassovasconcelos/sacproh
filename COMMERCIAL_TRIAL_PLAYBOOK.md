@@ -70,7 +70,7 @@ Depois da qualificação, o operador informa o CNPJ, escolhe o plano, move a opo
 
 Antes de liberar em produção:
 
-- aplique `20260810_trial_provisioning.sql` depois da migração de captação;
+- aplique `202608100001_trial_provisioning.sql` depois da migração de captação;
 - configure `SAC_APP_URL` na função para o link correto do convite;
 - teste ativação repetida, e-mail já cadastrado, CNPJ duplicado e plano indisponível;
 - confirme o recebimento do convite, a definição de senha e o isolamento do novo tenant;

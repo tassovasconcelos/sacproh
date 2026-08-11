@@ -14,8 +14,8 @@ const forbidText = (path, pattern, message) => {
 requireText('supabase/migrations/20260810_commercial_trial_requests.sql', /enable row level security/i, 'RLS precisa estar habilitado.');
 requireText('supabase/migrations/20260810_commercial_trial_requests.sql', /force row level security/i, 'RLS precisa ser forçado.');
 requireText('supabase/migrations/20260810_commercial_trial_requests.sql', /revoke all[\s\S]*anon, authenticated/i, 'A tabela comercial não pode ser lida diretamente.');
-requireText('supabase/migrations/20260810_trial_provisioning.sql', /revoke all on function[\s\S]*public,anon,authenticated/i, 'O provisionamento deve permanecer restrito.');
-requireText('supabase/migrations/20260810_trial_provisioning.sql', /grant execute on function[\s\S]*service_role/i, 'Somente service_role deve executar o provisionamento.');
+requireText('supabase/migrations/202608100001_trial_provisioning.sql', /revoke all on function[\s\S]*public,anon,authenticated/i, 'O provisionamento deve permanecer restrito.');
+requireText('supabase/migrations/202608100001_trial_provisioning.sql', /grant execute on function[\s\S]*service_role/i, 'Somente service_role deve executar o provisionamento.');
 requireText('supabase/migrations/20260811_commercial_orders.sql', /force row level security/i, 'Pedidos comerciais precisam forçar RLS.');
 requireText('supabase/migrations/20260811_commercial_orders.sql', /contract_evidence_reference[\s\S]*contract_accepted_at/i, 'Pedido anual precisa manter evidência contratual.');
 requireText('supabase/migrations/20260812_billing_lifecycle.sql', /trg_billing_events_immutable/i, 'Eventos financeiros precisam ser imutáveis.');
@@ -44,7 +44,15 @@ requireText('supabase/functions/mercadopago-checkout/index.ts', /COMMERCIAL_CHEC
 
 requireText('.github/workflows/release-supabase.yml', /environment:\s*\$\{\{ inputs\.target \}\}/, 'Release precisa usar ambiente protegido.');
 requireText('.github/workflows/release-supabase.yml', /db push[^\n]*--dry-run/, 'Release precisa revisar migrações antes da aplicação.');
-forbidText('.github/workflows/deploy-sacproh.yml', /supabase (db push|functions deploy)/, 'Push comum não pode alterar o backend Supabase.');
+const pagesWorkflow=read('.github/workflows/deploy-sacproh.yml');
+if (/supabase (db push|functions deploy)/.test(pagesWorkflow)) {
+  if (!/supabase_backend:\s*\n\s*if:\s*github\.event_name == 'workflow_dispatch' && inputs\.backend_operation != 'none'/.test(pagesWorkflow)) {
+    failures.push('.github/workflows/deploy-sacproh.yml: Backend Supabase precisa permanecer restrito ao acionamento manual.');
+  }
+  if (!/COMMERCIAL_CHECKOUT_ENABLED:\s*["']false["']/.test(pagesWorkflow)) {
+    failures.push('.github/workflows/deploy-sacproh.yml: Checkout precisa permanecer desligado durante a homologacao manual.');
+  }
+}
 
 if (failures.length) {
   console.error('Proteções comerciais ausentes:\n- ' + failures.join('\n- '));

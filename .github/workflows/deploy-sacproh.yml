@@ -4,6 +4,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      backend_operation:
+        description: Backend Supabase
+        required: true
+        type: choice
+        options:
+          - none
+          - preview
+          - apply
+        default: none
 
 permissions:
   contents: read
@@ -63,3 +73,80 @@ jobs:
       - name: Publicar SACPROH
         id: deployment
         uses: actions/deploy-pages@v4
+
+  supabase_backend:
+    if: github.event_name == 'workflow_dispatch' && inputs.backend_operation != 'none'
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      COMMERCIAL_ADMIN_EMAILS: ${{ secrets.COMMERCIAL_ADMIN_EMAILS }}
+      SAC_APP_URL: ${{ secrets.SAC_APP_URL }}
+      PUBLIC_SITE_URL: ${{ secrets.PUBLIC_SITE_URL }}
+      COMMERCIAL_CHECKOUT_ENABLED: "false"
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v6
+
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validar configuracao
+        shell: bash
+        run: |
+          required=(SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF COMMERCIAL_ADMIN_EMAILS SAC_APP_URL PUBLIC_SITE_URL)
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "Configuracao ausente: $name"
+              exit 1
+            fi
+          done
+
+      - name: Vincular projeto
+        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      # O projeto SACPROH existia antes de o historico de migracoes ser
+      # adotado. Estes arquivos correspondem apenas ao schema legado que ja
+      # foi conferido no projeto; as migracoes comerciais continuam pendentes.
+      - name: Sincronizar historico legado
+        if: inputs.backend_operation == 'apply'
+        run: |
+          supabase migration repair --linked --status reverted 010
+          supabase migration repair --linked --status applied 001 002 003 004 005 006 007 008 009
+
+      - name: Revisar migracoes
+        run: supabase db push --linked --include-all --dry-run
+
+      - name: Aplicar migracoes
+        if: inputs.backend_operation == 'apply'
+        run: supabase db push --linked --include-all
+
+      - name: Configurar segredos das funcoes
+        if: inputs.backend_operation == 'apply'
+        shell: bash
+        run: |
+          supabase secrets set \
+            "COMMERCIAL_ADMIN_EMAILS=$COMMERCIAL_ADMIN_EMAILS" \
+            "SAC_APP_URL=$SAC_APP_URL" \
+            "PUBLIC_SITE_URL=$PUBLIC_SITE_URL" \
+            "COMMERCIAL_CHECKOUT_ENABLED=$COMMERCIAL_CHECKOUT_ENABLED" \
+            --project-ref "$PROJECT_REF"
+
+      - name: Publicar funcoes comerciais
+        if: inputs.backend_operation == 'apply'
+        run: |
+          supabase functions deploy request-trial --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy manage-trials --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy invite-user --project-ref "$PROJECT_REF"
+
+      - name: Testar disponibilidade
+        if: inputs.backend_operation == 'apply'
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --request OPTIONS \
+            "https://${PROJECT_REF}.supabase.co/functions/v1/manage-trials" \
+            --header "Origin: ${PUBLIC_SITE_URL}" \
+            --header "Access-Control-Request-Method: POST"
