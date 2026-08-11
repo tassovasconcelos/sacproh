@@ -53,13 +53,18 @@ jobs:
       - name: Validar configuração protegida
         shell: bash
         run: |
-          required=(SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF COMMERCIAL_ADMIN_EMAILS SAC_APP_URL PUBLIC_SITE_URL MERCADO_PAGO_ACCESS_TOKEN MERCADO_PAGO_WEBHOOK_SECRET RESEND_API_KEY COMMERCIAL_ALERT_FROM COMMERCIAL_ALERT_TO)
+          required=(SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF COMMERCIAL_ADMIN_EMAILS SAC_APP_URL PUBLIC_SITE_URL)
           for name in "${required[@]}"; do
             if [ -z "${!name}" ]; then echo "Configuração ausente: $name"; exit 1; fi
           done
           case "$PUBLIC_SITE_URL" in https://*) ;; *) echo "PUBLIC_SITE_URL deve usar HTTPS"; exit 1;; esac
           case "$SAC_APP_URL" in https://*) ;; *) echo "SAC_APP_URL deve usar HTTPS"; exit 1;; esac
           if [[ ! "$PUBLIC_SITE_URL" =~ ^https://[^/]+$ ]]; then echo "PUBLIC_SITE_URL deve conter somente a origem, sem caminho ou barra final"; exit 1; fi
+          if [ "$COMMERCIAL_CHECKOUT_ENABLED" = "true" ]; then
+            for name in MERCADO_PAGO_ACCESS_TOKEN MERCADO_PAGO_WEBHOOK_SECRET; do
+              if [ -z "${!name}" ]; then echo "Checkout habilitado, mas falta: $name"; exit 1; fi
+            done
+          fi
 
       - name: Vincular projeto
         run: supabase link --project-ref "$PROJECT_REF"
@@ -73,27 +78,33 @@ jobs:
 
       - name: Configurar segredos das funções
         if: inputs.operation == 'apply'
-        run: >-
-          supabase secrets set
-          COMMERCIAL_ADMIN_EMAILS="$COMMERCIAL_ADMIN_EMAILS"
-          SAC_APP_URL="$SAC_APP_URL"
-          PUBLIC_SITE_URL="$PUBLIC_SITE_URL"
-          MERCADO_PAGO_ACCESS_TOKEN="$MERCADO_PAGO_ACCESS_TOKEN"
-          MERCADO_PAGO_WEBHOOK_SECRET="$MERCADO_PAGO_WEBHOOK_SECRET"
-          COMMERCIAL_CHECKOUT_ENABLED="$COMMERCIAL_CHECKOUT_ENABLED"
-          RESEND_API_KEY="$RESEND_API_KEY"
-          COMMERCIAL_ALERT_FROM="$COMMERCIAL_ALERT_FROM"
-          COMMERCIAL_ALERT_TO="$COMMERCIAL_ALERT_TO"
-          --project-ref "$PROJECT_REF"
+        shell: bash
+        run: |
+          args=(
+            "COMMERCIAL_ADMIN_EMAILS=$COMMERCIAL_ADMIN_EMAILS"
+            "SAC_APP_URL=$SAC_APP_URL"
+            "PUBLIC_SITE_URL=$PUBLIC_SITE_URL"
+            "COMMERCIAL_CHECKOUT_ENABLED=$COMMERCIAL_CHECKOUT_ENABLED"
+          )
+          [ -n "$RESEND_API_KEY" ] && args+=("RESEND_API_KEY=$RESEND_API_KEY")
+          [ -n "$COMMERCIAL_ALERT_FROM" ] && args+=("COMMERCIAL_ALERT_FROM=$COMMERCIAL_ALERT_FROM")
+          [ -n "$COMMERCIAL_ALERT_TO" ] && args+=("COMMERCIAL_ALERT_TO=$COMMERCIAL_ALERT_TO")
+          [ -n "$MERCADO_PAGO_ACCESS_TOKEN" ] && args+=("MERCADO_PAGO_ACCESS_TOKEN=$MERCADO_PAGO_ACCESS_TOKEN")
+          [ -n "$MERCADO_PAGO_WEBHOOK_SECRET" ] && args+=("MERCADO_PAGO_WEBHOOK_SECRET=$MERCADO_PAGO_WEBHOOK_SECRET")
+          supabase secrets set "${args[@]}" --project-ref "$PROJECT_REF"
 
       - name: Publicar funções comerciais
         if: inputs.operation == 'apply'
         run: |
           supabase functions deploy request-trial --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy manage-trials --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy invite-user --project-ref "$PROJECT_REF"
+
+      - name: Publicar integracao Mercado Pago
+        if: inputs.operation == 'apply' && env.COMMERCIAL_CHECKOUT_ENABLED == 'true'
+        run: |
           supabase functions deploy mercadopago-checkout --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy mercadopago-webhook --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy invite-user --project-ref "$PROJECT_REF"
 
       - name: Testar disponibilidade da captação
         if: inputs.operation == 'apply'
