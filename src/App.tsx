@@ -308,7 +308,9 @@ export default function App() {
     return <Suspense fallback={<ModuleLoading />}><CommercialTrialAdmin /></Suspense>;
   }
 
-  if (isSaasTrialHost) {
+  // No host comercial, a raiz continua sendo a landing page. A rota
+  // /sacproh abre o aplicativo autenticado para trial e homologacao.
+  if (isSaasTrialHost && !isSacProhPath) {
     return <Suspense fallback={<ModuleLoading />}><SaasTrialPortal /></Suspense>;
   }
 
