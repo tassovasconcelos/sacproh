@@ -1,4 +1,5 @@
--- Central gerencial: telemetria funcional, agregados e histórico de versões.
+
+-- Central gerencial: telemetria funcional, agregados e histÃ³rico de versÃµes.
 CREATE TABLE IF NOT EXISTS public.platform_usage_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
@@ -22,7 +23,7 @@ WITH CHECK (user_id = auth.uid() AND tenant_id = public.current_tenant_id());
 
 DROP POLICY IF EXISTS usage_read_tenant_admin ON public.platform_usage_events;
 CREATE POLICY usage_read_tenant_admin ON public.platform_usage_events FOR SELECT TO authenticated
-USING (tenant_id = public.current_tenant_id() AND public.current_role_code() IN ('SUPERADMIN','ADMIN_EMPRESA','DIRETORIA'));
+USING (tenant_id = public.current_tenant_id() AND public.user_role_code() IN ('SUPERADMIN','ADMIN_EMPRESA','DIRETORIA'));
 
 CREATE TABLE IF NOT EXISTS public.product_releases (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -37,10 +38,11 @@ DROP POLICY IF EXISTS releases_authenticated_read ON public.product_releases;
 CREATE POLICY releases_authenticated_read ON public.product_releases FOR SELECT TO authenticated USING (true);
 
 INSERT INTO public.product_releases(version,title,summary,improvements)
-VALUES ('4.1.0','SAC 4.0 — Gestão, rastreabilidade e engajamento','Consolidação comercial e gerencial do SAC 4.0, mantendo todos os processos existentes.',
-  '["Central gerencial multiempresa","Trials de 15 dias e gestão de assinaturas","Mercado Pago com conciliação e alertas","Identidade visual por cliente","Inteligência de lote, validade e recall","Filtros por empresa e usuário","Edição, bloqueio e recuperação de acesso","Métricas de acessos, áreas e registros","Auditoria administrativa e segurança multiempresa"]'::jsonb)
+VALUES ('4.1.0','SAC 4.0 â€” GestÃ£o, rastreabilidade e engajamento','ConsolidaÃ§Ã£o comercial e gerencial do SAC 4.0, mantendo todos os processos existentes.',
+  '["Central gerencial multiempresa","Trials de 15 dias e gestÃ£o de assinaturas","Mercado Pago com conciliaÃ§Ã£o e alertas","Identidade visual por cliente","InteligÃªncia de lote, validade e recall","Filtros por empresa e usuÃ¡rio","EdiÃ§Ã£o, bloqueio e recuperaÃ§Ã£o de acesso","MÃ©tricas de acessos, Ã¡reas e registros","Auditoria administrativa e seguranÃ§a multiempresa"]'::jsonb)
 ON CONFLICT (version) DO UPDATE SET title=EXCLUDED.title,summary=EXCLUDED.summary,improvements=EXCLUDED.improvements,published_at=now();
 
 REVOKE ALL ON public.platform_usage_events, public.product_releases FROM anon;
 GRANT SELECT,INSERT ON public.platform_usage_events TO authenticated;
 GRANT SELECT ON public.product_releases TO authenticated;
+
