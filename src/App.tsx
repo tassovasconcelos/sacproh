@@ -5,6 +5,7 @@ import { TicketList } from './components/tickets/TicketList';
 import { NewTicketModal } from './components/tickets/NewTicketModal';
 import { TicketDetailView } from './components/tickets/TicketDetailView';
 const ExecutiveDashboard = lazy(() => import('./components/dashboard/ExecutiveDashboard').then(module => ({ default: module.ExecutiveDashboard })));
+const TraceabilityIntelligence = lazy(() => import('./components/intelligence/TraceabilityIntelligence').then(module => ({ default: module.TraceabilityIntelligence })));
 const QualityModule = lazy(() => import('./components/quality/QualityModule').then(module => ({ default: module.QualityModule })));
 const TechnicalModule = lazy(() => import('./components/technical/TechnicalModule').then(module => ({ default: module.TechnicalModule })));
 const LogisticsModule = lazy(() => import('./components/logistics/LogisticsModule').then(module => ({ default: module.LogisticsModule })));
@@ -376,7 +377,7 @@ export default function App() {
           ) : (
             <>
               {currentView === 'dashboard' && (
-                <ExecutiveDashboard tickets={tickets} />
+                <ExecutiveDashboard tickets={tickets} tenant={currentTenant} />
               )}
 
               {currentView === 'tickets' && (
@@ -421,6 +422,10 @@ export default function App() {
 
               {currentView === 'reports' && (
                 <ExecutiveDashboard tickets={tickets} tenant={currentTenant} />
+              )}
+
+              {currentView === 'traceability' && (
+                <TraceabilityIntelligence tickets={tickets} products={products} tenantId={currentTenant.id} userRole={currentUser.roleCode} />
               )}
 
               {currentView === 'users' && (

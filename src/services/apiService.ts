@@ -1,5 +1,5 @@
 import { 
-  Ticket, Customer, Product, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage, Tenant
+  Ticket, Customer, Product, ProductLot, LotAction, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage, Tenant
 } from '../types';
 import { 
   mockTickets, mockCustomers, mockProducts, mockQualityPlans, mockTechnicalCases, mockLogisticsCases, mockAuditLogs, mockUsers, mockServiceOrders 
@@ -59,8 +59,24 @@ const productFromDb = (row: any): Product => ({
   id: row.id, tenantId: row.tenant_id, codeSku: row.code_sku, name: row.name,
   familyId: row.family_id || undefined, model: row.model || undefined,
   anvisaRegister: row.anvisa_register || undefined,
-  supplierName: row.supplier_name || undefined, countryOrigin: row.country_origin || undefined
+  supplierName: row.supplier_name || undefined, countryOrigin: row.country_origin || undefined,
+  brand: row.brand || undefined, manufacturerName: row.manufacturer_name || undefined,
+  importerName: row.importer_name || undefined, distributorName: row.distributor_name || undefined
 });
+
+const productLotFromDb = (row:any):ProductLot => ({
+  id:row.id, tenantId:row.tenant_id, productId:row.product_id, lotNumber:row.lot_number,
+  manufacturingDate:row.manufacturing_date || undefined, expirationDate:row.expiration_date || undefined,
+  receivedQuantity:Number(row.received_quantity || 0), soldQuantity:Number(row.sold_quantity || 0),
+  stockQuantity:Number(row.stock_quantity || 0), status:row.status,
+  supplierDocument:row.supplier_document || undefined, notes:row.notes || undefined,
+  createdAt:row.created_at, updatedAt:row.updated_at
+});
+
+const lotActionFromDb=(row:any):LotAction=>({id:row.id,tenantId:row.tenant_id,productLotId:row.product_lot_id,
+  actionType:row.action_type,status:row.status,reason:row.reason,ownerName:row.owner_name,
+  dueDate:row.due_date||undefined,affectedCustomers:Number(row.affected_customers||0),affectedUnits:Number(row.affected_units||0),
+  createdAt:row.created_at,completedAt:row.completed_at||undefined});
 
 const ticketFromDb = (row: any): Ticket => ({
   id: row.id, tenantId: row.tenant_id, protocol: row.protocol, unitId: row.unit_id || undefined,
@@ -82,7 +98,10 @@ const ticketFromDb = (row: any): Ticket => ({
   createdBy: row.created_by, createdByName: row.created_by_name || 'Usuário do SAC', createdAt: row.created_at, updatedAt: row.updated_at,
   items: (row.items || []).map((i:any) => ({ id:i.id, ticketId:i.ticket_id, productId:i.product_id || undefined,
     productName:i.product_name, sku:i.sku || undefined, quantity:i.quantity, serialNumber:i.serial_number || undefined,
-    lotNumber:i.lot_number || undefined, expirationDate:i.expiration_date || undefined, anvisaRegister:i.anvisa_register || undefined })),
+    lotNumber:i.lot_number || undefined, manufacturingDate:i.manufacturing_date || undefined,
+    expirationDate:i.expiration_date || undefined, anvisaRegister:i.anvisa_register || undefined,
+    manufacturerName:i.manufacturer_name || undefined, importerName:i.importer_name || undefined,
+    distributorName:i.distributor_name || undefined, retailerName:i.retailer_name || undefined })),
   commentsCount: 0, attachmentsCount: 0
 });
 
@@ -186,8 +205,13 @@ export const apiService = {
             quantity: item.quantity,
             serial_number: item.serialNumber || null,
             lot_number: item.lotNumber || null,
+            manufacturing_date: item.manufacturingDate || null,
             expiration_date: item.expirationDate || null,
-            anvisa_register: item.anvisaRegister || null
+            anvisa_register: item.anvisaRegister || null,
+            manufacturer_name: item.manufacturerName || null,
+            importer_name: item.importerName || null,
+            distributor_name: item.distributorName || null,
+            retailer_name: item.retailerName || null
           })));
           if (itemError) throw itemError;
         }
@@ -576,6 +600,45 @@ export const apiService = {
       if (!error) return (data || []).map(productFromDb);
     }
     return localProducts;
+  },
+
+  async getProductLots(tenantId:string):Promise<ProductLot[]> {
+    if (!isSupabaseConfigured) return [];
+    const { data,error } = await supabase.from('product_lots').select('*').eq('tenant_id',tenantId).order('updated_at',{ascending:false});
+    if (error) throw new Error(`Não foi possível carregar os lotes: ${error.message}`);
+    return (data || []).map(productLotFromDb);
+  },
+
+  async createProductLot(lot:Omit<ProductLot,'id'|'createdAt'|'updatedAt'>):Promise<ProductLot> {
+    const { data,error } = await supabase.from('product_lots').insert({
+      tenant_id:lot.tenantId, product_id:lot.productId, lot_number:lot.lotNumber,
+      manufacturing_date:lot.manufacturingDate || null, expiration_date:lot.expirationDate || null,
+      received_quantity:lot.receivedQuantity, sold_quantity:lot.soldQuantity, stock_quantity:lot.stockQuantity,
+      status:lot.status, supplier_document:lot.supplierDocument || null, notes:lot.notes || null
+    }).select().single();
+    if(error || !data) throw new Error(`Não foi possível cadastrar o lote: ${error?.message || ''}`);
+    return productLotFromDb(data);
+  },
+
+  async updateProductLotStatus(id:string,status:ProductLot['status'],notes?:string):Promise<ProductLot> {
+    const { data,error } = await supabase.from('product_lots').update({status,notes:notes || null,updated_at:new Date().toISOString()}).eq('id',id).select().single();
+    if(error || !data) throw new Error(`Não foi possível alterar o lote: ${error?.message || ''}`);
+    return productLotFromDb(data);
+  },
+
+  async getLotActions(tenantId:string):Promise<LotAction[]> {
+    if(!isSupabaseConfigured)return [];
+    const{data,error}=await supabase.from('lot_actions').select('*').eq('tenant_id',tenantId).order('created_at',{ascending:false});
+    if(error)throw new Error(`Não foi possível carregar as ações de lote: ${error.message}`);
+    return(data||[]).map(lotActionFromDb);
+  },
+
+  async createLotAction(action:Omit<LotAction,'id'|'createdAt'|'completedAt'>):Promise<LotAction>{
+    const{data,error}=await supabase.from('lot_actions').insert({tenant_id:action.tenantId,product_lot_id:action.productLotId,
+      action_type:action.actionType,status:action.status,reason:action.reason,owner_name:action.ownerName,due_date:action.dueDate||null,
+      affected_customers:action.affectedCustomers,affected_units:action.affectedUnits}).select().single();
+    if(error||!data)throw new Error(`Não foi possível registrar a ação: ${error?.message||''}`);
+    return lotActionFromDb(data);
   },
 
   async getCarriers(): Promise<Carrier[]> {
