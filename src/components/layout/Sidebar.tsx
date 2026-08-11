@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   LayoutDashboard, Ticket, CheckSquare2, Wrench, Truck, UploadCloud, 
-  BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe 
+  BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe, ShieldAlert
 } from 'lucide-react';
 
 export type NavView = 
@@ -9,6 +9,7 @@ export type NavView =
   | 'tickets' 
   | 'new_ticket' 
   | 'quality' 
+  | 'risk'
   | 'technical' 
   | 'logistics' 
   | 'import' 
@@ -25,6 +26,7 @@ interface SidebarProps {
   isAdminAuthenticated: boolean;
   onOpenAdminLogin: () => void;
   onGoToPortal: () => void;
+  currentUserRole: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -33,12 +35,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   openTicketsCount,
   isAdminAuthenticated,
   onOpenAdminLogin,
-  onGoToPortal
+  onGoToPortal,
+  currentUserRole
 }) => {
   const opMenuItems: { id: NavView; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'dashboard', label: 'Dashboard Executivo', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'tickets', label: 'Chamados SAC', icon: <Ticket className="w-4 h-4" />, badge: openTicketsCount },
     { id: 'quality', label: 'Qualidade & 5W2H', icon: <CheckSquare2 className="w-4 h-4" /> },
+    ...(['SUPERADMIN','DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA'].includes(currentUserRole) ? [{ id: 'risk' as NavView, label: 'Riscos, CAPA & Auditorias', icon: <ShieldAlert className="w-4 h-4" /> }] : []),
     { id: 'technical', label: 'Assistência Técnica (OS)', icon: <Wrench className="w-4 h-4" /> },
     { id: 'logistics', label: 'Logística & Coletas', icon: <Truck className="w-4 h-4" /> },
     { id: 'knowledge', label: 'Base de Conhecimento', icon: <BookOpen className="w-4 h-4" /> },
