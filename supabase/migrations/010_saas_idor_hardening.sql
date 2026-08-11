@@ -107,8 +107,11 @@ ALTER TABLE public.tenant_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenant_subscriptions FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.usage_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usage_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS saas_plans_read ON public.saas_plans;
 CREATE POLICY saas_plans_read ON public.saas_plans FOR SELECT TO authenticated USING(is_active=true);
+DROP POLICY IF EXISTS tenant_subscription_read ON public.tenant_subscriptions;
 CREATE POLICY tenant_subscription_read ON public.tenant_subscriptions FOR SELECT TO authenticated USING(tenant_id=public.user_tenant_id());
+DROP POLICY IF EXISTS usage_events_read ON public.usage_events;
 CREATE POLICY usage_events_read ON public.usage_events FOR SELECT TO authenticated
   USING(tenant_id=public.user_tenant_id() AND public.user_role_code() IN('SUPERADMIN','ADMIN_EMPRESA','DIRETORIA'));
 REVOKE ALL ON public.tenant_subscriptions,public.usage_events FROM anon;
