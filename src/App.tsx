@@ -30,6 +30,7 @@ import {
 import { mockTenants, mockCustomers, mockProducts } from './lib/mockData';
 import { apiService } from './services/apiService';
 import { supabase } from './lib/supabase';
+import { usageAnalytics } from './services/usageAnalytics';
 
 export default function App() {
   const isSaasTrialHost = typeof window !== 'undefined' &&
@@ -133,6 +134,11 @@ export default function App() {
   }, [currentUser?.id, currentUser?.tenantId]);
 
   useEffect(() => {
+    if (!currentUser?.id || !currentUser.tenantId || appMode !== 'app') return;
+    usageAnalytics.track(currentUser.tenantId, currentUser.id, currentView, 'AREA_VIEW');
+  }, [currentUser?.id, currentUser?.tenantId, currentView, appMode]);
+
+  useEffect(() => {
     const restoreSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (!data.session?.user) return;
@@ -142,6 +148,7 @@ export default function App() {
         if(tenant){setCurrentTenant(tenant);setTenants([tenant]);}else setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
         setCurrentUser(profile);
         setIsAdminAuthenticated(['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode));
+        usageAnalytics.track(profile.tenantId, profile.id, 'session', 'SESSION_START');
       }
     };
     restoreSession();
@@ -152,6 +159,7 @@ export default function App() {
     setTickets(prev => [newTicket, ...prev]);
     setIsNewTicketModalOpen(false);
     setSelectedTicket(newTicket);
+    if (currentUser) usageAnalytics.track(currentUser.tenantId, currentUser.id, 'tickets', 'RECORD_CREATED', 'ticket', newTicket.id);
   };
 
   // Ticket Status Updated Handler
@@ -159,6 +167,7 @@ export default function App() {
     if (!currentUser) return;
     const updated = await apiService.updateTicketStatus(ticketId, newStatus, notes, currentUser.id);
     if (updated) {
+      usageAnalytics.track(currentUser.tenantId, currentUser.id, 'tickets', 'RECORD_UPDATED', 'ticket', ticketId);
       setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus } : t));
       if (selectedTicket?.id === ticketId) {
         setSelectedTicket(prev => prev ? { ...prev, status: newStatus } : null);
@@ -190,6 +199,7 @@ export default function App() {
     setServiceOrders(prev => [newOS, ...prev]);
     const tCases = await apiService.getTechnicalCases();
     setTechnicalCases(tCases);
+    if (currentUser) usageAnalytics.track(currentUser.tenantId, currentUser.id, 'technical', 'RECORD_CREATED', 'service_order', newOS.id);
   };
 
   const handleUpdateTicket = async (ticket: Ticket, changes: Partial<Ticket>) => {
@@ -197,6 +207,7 @@ export default function App() {
     const updated = await apiService.updateTicket(ticket, changes, currentUser);
     setTickets(previous => previous.map(item => item.id === updated.id ? updated : item));
     setSelectedTicket(updated);
+    usageAnalytics.track(currentUser.tenantId, currentUser.id, 'tickets', 'RECORD_UPDATED', 'ticket', ticket.id);
   };
 
   const handleDeleteTicket = async (ticket: Ticket, reason: string) => {
@@ -219,6 +230,7 @@ export default function App() {
   const handleCreateUser = async (userData: Omit<UserProfile, 'id'>) => {
     const created = await apiService.createUser(userData);
     setUsers(prev => [created, ...prev]);
+    if (currentUser) usageAnalytics.track(currentUser.tenantId, currentUser.id, 'users', 'RECORD_CREATED', 'profile', created.id);
   };
 
   const handleUpdateUser = async (userId: string, data: Partial<UserProfile>) => {
@@ -257,6 +269,7 @@ export default function App() {
     setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
     apiService.getTenant(profile.tenantId).then(tenant=>{if(tenant){setCurrentTenant(tenant);setTenants([tenant]);}});
     setCurrentUser(profile);
+    usageAnalytics.track(profile.tenantId, profile.id, 'session', 'SESSION_START');
     const hasAdminAccess = ['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode);
     setIsAdminAuthenticated(hasAdminAccess);
     setShowAdminLoginModal(false);

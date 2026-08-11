@@ -35,15 +35,28 @@ Deno.serve(async req=>{
     if(!profile?.is_active||profile.role_code!=='SUPERADMIN'||!allowedEmails.has(user.email.toLowerCase()))return response(origin,{error:'Acesso comercial não autorizado.'},403);
     const body=await req.json();
     if(body.action==='platform_overview'){
-      const [{data:trials,error:trialsError},{data:subscriptions,error:subscriptionsError},{data:orders,error:ordersError},{data:alerts,error:alertsError},{data:profiles,error:profilesError}]=await Promise.all([
+      const since30=new Date(Date.now()-30*86400000).toISOString();
+      const [{data:trials,error:trialsError},{data:subscriptions,error:subscriptionsError},{data:orders,error:ordersError},{data:alerts,error:alertsError},{data:profiles,error:profilesError},{data:usage,error:usageError},{data:authUsers,error:authUsersError}]=await Promise.all([
         admin.from('commercial_trial_requests').select('id,status,created_at,trial_ends_at,company_name,work_email,segment,provisioned_tenant_id').order('created_at',{ascending:false}).limit(200),
         admin.from('tenant_subscriptions').select('id,tenant_id,status,seat_limit,trial_ends_at,current_period_end,billing_email,tenant:tenants(name,trade_name,document,is_active),plan:saas_plans(code,name,included_seats)').order('updated_at',{ascending:false}).limit(300),
         admin.from('commercial_orders').select('id,tenant_id,status,plan_code,expected_amount,currency,last_payment_status,created_at,updated_at').order('created_at',{ascending:false}).limit(200),
         admin.from('commercial_alerts').select('id,severity,alert_type,message,status,created_at,order_id').eq('status','OPEN').order('created_at',{ascending:false}).limit(100),
         admin.from('profiles').select('id,tenant_id,full_name,email,role_code,is_active,created_at,tenant:tenants(name,trade_name)').order('created_at',{ascending:false}).limit(1000),
+        admin.from('platform_usage_events').select('user_id,area,event_type,occurred_at').gte('occurred_at',since30).order('occurred_at',{ascending:false}).limit(10000),
+        admin.auth.admin.listUsers({page:1,perPage:1000}),
       ]);
-      const firstError=trialsError||subscriptionsError||ordersError||alertsError||profilesError;if(firstError)throw firstError;
-      return response(origin,{trials:trials||[],subscriptions:subscriptions||[],orders:orders||[],alerts:alerts||[],users:profiles||[]});
+      const firstError=trialsError||subscriptionsError||ordersError||alertsError||profilesError||usageError||authUsersError;if(firstError)throw firstError;
+      const authMap=new Map((authUsers?.users||[]).map(item=>[item.id,item]));
+      const userStats=new Map<string,{area_views:number;record_events:number;last_activity_at:string|null;areas:Map<string,number>}>();
+      const areaStats=new Map<string,{views:number;users:Set<string>}>();
+      const active7=new Set<string>(),active30=new Set<string>();const sevenDaysAgo=Date.now()-7*86400000;
+      for(const event of usage||[]){const stat=userStats.get(event.user_id)||{area_views:0,record_events:0,last_activity_at:null,areas:new Map<string,number>()};
+        if(event.event_type==='AREA_VIEW'){stat.area_views++;stat.areas.set(event.area,(stat.areas.get(event.area)||0)+1);const area=areaStats.get(event.area)||{views:0,users:new Set<string>()};area.views++;area.users.add(event.user_id);areaStats.set(event.area,area);}
+        if(event.event_type==='RECORD_CREATED'||event.event_type==='RECORD_UPDATED')stat.record_events++;
+        if(!stat.last_activity_at||event.occurred_at>stat.last_activity_at)stat.last_activity_at=event.occurred_at;userStats.set(event.user_id,stat);active30.add(event.user_id);if(new Date(event.occurred_at).getTime()>=sevenDaysAgo)active7.add(event.user_id);}
+      const enrichedUsers=(profiles||[]).map(profile=>{const stats=userStats.get(profile.id),authUser=authMap.get(profile.id);const topArea=stats?[...stats.areas.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||null:null;return{...profile,last_sign_in_at:authUser?.last_sign_in_at||null,sign_in_count:Number(authUser?.user_metadata?.sign_in_count||0),area_views:stats?.area_views||0,record_events:stats?.record_events||0,last_activity_at:stats?.last_activity_at||null,top_area:topArea};});
+      const engagement={total_sessions:(usage||[]).filter(item=>item.event_type==='SESSION_START').length,total_area_views:(usage||[]).filter(item=>item.event_type==='AREA_VIEW').length,total_record_events:(usage||[]).filter(item=>item.event_type==='RECORD_CREATED'||item.event_type==='RECORD_UPDATED').length,active_users_7d:active7.size,active_users_30d:active30.size,areas:[...areaStats.entries()].map(([area,value])=>({area,views:value.views,users:value.users.size})).sort((a,b)=>b.views-a.views)};
+      return response(origin,{trials:trials||[],subscriptions:subscriptions||[],orders:orders||[],alerts:alerts||[],users:enrichedUsers,engagement});
     }
     if(body.action==='update_platform_user'){
       const profileId=clean(body.id,40),roleCode=clean(body.roleCode,40).toUpperCase(),isActive=body.isActive;
@@ -55,6 +68,27 @@ Deno.serve(async req=>{
       const {data:updated,error:updateError}=await admin.from('profiles').update({role_code:roleCode,is_active:isActive}).eq('id',profileId).select('id,tenant_id,full_name,email,role_code,is_active').single();if(updateError)throw updateError;
       const {error:auditError}=await admin.from('platform_admin_actions').insert({actor_id:user.id,target_user_id:profileId,tenant_id:target.tenant_id,action:isActive?'USER_ACCESS_UPDATED':'USER_BLOCKED',details:{previous_role:target.role_code,new_role:roleCode,previous_active:target.is_active,new_active:isActive,target_email:target.email}});if(auditError)throw auditError;
       return response(origin,{item:updated});
+    }
+    if(body.action==='edit_platform_user'){
+      const profileId=clean(body.id,40),fullName=clean(body.fullName,160),targetEmail=clean(body.email,254).toLowerCase(),roleCode=clean(body.roleCode,40).toUpperCase(),isActive=body.isActive;
+      const assignableRoles=new Set(['DIRETORIA','RESPONSAVEL_TECNICA','TECNICO','GERENTE_LOJA','SAC','LOGISTICA','ADMIN_EMPRESA']);
+      if(!/^[0-9a-f-]{36}$/i.test(profileId)||fullName.length<3||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)||!assignableRoles.has(roleCode)||typeof isActive!=='boolean')return response(origin,{error:'Dados do usuário inválidos.'},400);
+      if(profileId===user.id)return response(origin,{error:'O superadmin não pode editar o próprio cadastro neste painel.'},409);
+      const {data:target,error:targetError}=await admin.from('profiles').select('id,tenant_id,full_name,email,role_code,is_active').eq('id',profileId).single();if(targetError)throw targetError;
+      if(target.role_code==='SUPERADMIN')return response(origin,{error:'Outro superadmin não pode ser alterado por este painel.'},403);
+      if(target.email.toLowerCase()!==targetEmail){const {error:authUpdateError}=await admin.auth.admin.updateUserById(profileId,{email:targetEmail,email_confirm:false});if(authUpdateError)throw authUpdateError;}
+      const {data:updated,error:updateError}=await admin.from('profiles').update({full_name:fullName,email:targetEmail,role_code:roleCode,is_active:isActive}).eq('id',profileId).select('id,tenant_id,full_name,email,role_code,is_active').single();if(updateError)throw updateError;
+      const {error:auditError}=await admin.from('platform_admin_actions').insert({actor_id:user.id,target_user_id:profileId,tenant_id:target.tenant_id,action:'USER_PROFILE_EDITED',details:{before:target,after:{full_name:fullName,email:targetEmail,role_code:roleCode,is_active:isActive}}});if(auditError)throw auditError;
+      return response(origin,{item:updated});
+    }
+    if(body.action==='send_password_recovery'){
+      const profileId=clean(body.id,40);if(!/^[0-9a-f-]{36}$/i.test(profileId)||profileId===user.id)return response(origin,{error:'Usuário inválido para recuperação.'},400);
+      const {data:target,error:targetError}=await admin.from('profiles').select('id,tenant_id,email,role_code,is_active').eq('id',profileId).single();if(targetError)throw targetError;
+      if(target.role_code==='SUPERADMIN')return response(origin,{error:'A recuperação de outro superadmin não é permitida neste painel.'},403);
+      const redirectTo=(Deno.env.get('SAC_APP_URL')||'https://apps.sacproh.gritnews.com.br')+'/';
+      const {error:resetError}=await auth.auth.resetPasswordForEmail(target.email,{redirectTo});if(resetError)throw resetError;
+      const {error:auditError}=await admin.from('platform_admin_actions').insert({actor_id:user.id,target_user_id:profileId,tenant_id:target.tenant_id,action:'PASSWORD_RECOVERY_SENT',details:{target_email:target.email}});if(auditError)throw auditError;
+      return response(origin,{ok:true});
     }
     if(body.action==='list'){
       let query=admin.from('commercial_trial_requests').select('*').order('created_at',{ascending:false}).limit(200);
