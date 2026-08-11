@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Globe, ShieldCheck, Wrench, Newspaper, ArrowRight, Activity, 
-  Lock, CheckCircle2, ChevronRight, Cpu, Building2, PhoneCall, Award
+  Lock, CheckCircle2, ChevronRight, Cpu, Building2, PhoneCall, Award, Instagram
 } from 'lucide-react';
 
 interface GritNewsPortalProps {
@@ -200,6 +200,7 @@ export const GritNewsPortal: React.FC<GritNewsPortalProps> = ({
       <footer className="bg-[#050E1A] border-t border-slate-800 py-6 px-4 md:px-8 text-center text-xs text-slate-500 space-y-2">
         <p>© 2026 GRIT NEWS (gritnews.com.br) & Procirúrgica Hospitalar. Todos os direitos reservados.</p>
         <p className="text-[11px] text-slate-600">Sistema em conformidade com as normas ANVISA RDC 67/2009 e LGPD.</p>
+        <a href="https://www.instagram.com/grit.solucoes/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-bold text-[#FF8500]"><Instagram className="h-4 w-4"/>Instagram @grit.solucoes</a>
       </footer>
     </div>
   );

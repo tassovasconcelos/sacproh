@@ -1,6 +1,7 @@
 import React, { FormEvent, useState } from 'react';
 import { CalendarCheck, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { submitTrialRequest, TrialRequestInput } from '../../services/trialService';
+import {trackMarketingEvent} from '../../services/marketingAnalytics';
 
 const initialForm: TrialRequestInput = {
   companyName: '', contactName: '', workEmail: '', phone: '', segment: '', monthlyTicketVolume: '',
@@ -19,6 +20,7 @@ export function TrialRequestForm() {
     setState('sending'); setFeedback('');
     try {
       await submitTrialRequest(form);
+      await trackMarketingEvent('trial_submit_success',{segment:form.segment,plan:form.planInterest});
       setState('success');
       setFeedback('Solicitação recebida. Nossa equipe entrará em contato para a qualificação e ativação assistida.');
       setForm(initialForm);
