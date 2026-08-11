@@ -24,19 +24,19 @@ const plans: Plan[] = [
     code: 'START', name: 'SAC Start', description: 'Para operações que estão estruturando o atendimento.',
     monthly: 'R$ 449', annual: 'R$ 5.388', promotionalMonthly: 'R$ 224,50', promotionalAnnual: 'R$ 2.694', setup: 'R$ 1.490', seats: '5 usuários incluídos',
     checkout: (import.meta as any).env?.VITE_CHECKOUT_START_URL,
-    features: ['Até 500 chamados/mês', 'Dashboard gerencial', 'Anexos, SLA e auditoria', 'Implantação assistida'],
+    features: ['Abertura e acompanhamento de SAC', 'Cadastro de clientes e produtos', 'Anexos e retorno ao cliente', 'Implantação assistida'],
   },
   {
     code: 'PRO', name: 'SAC Profissional', description: 'Para distribuidores, importadores e fabricantes.',
     monthly: 'R$ 1.079', annual: 'R$ 12.948', promotionalMonthly: 'R$ 539,50', promotionalAnnual: 'R$ 6.474', setup: 'R$ 2.990', seats: '15 usuários incluídos', highlight: true,
     checkout: (import.meta as any).env?.VITE_CHECKOUT_PRO_URL,
-    features: ['Até 3.000 chamados/mês', 'Marca e fluxos personalizados', 'Relatórios executivos e API', 'Onboarding e importação inicial'],
+    features: ['Tudo do SAC Start', 'Qualidade, lotes e rastreabilidade', 'Gestão de riscos, CAPA e regulatório', 'Relatórios executivos e API'],
   },
   {
     code: 'ENTERPRISE', name: 'SAC Enterprise', description: 'Para grupos com múltiplas empresas e operações.',
     monthly: 'R$ 2.249', annual: 'R$ 26.988', promotionalMonthly: 'R$ 1.124,50', promotionalAnnual: 'R$ 13.494', setup: 'R$ 5.990', seats: '40 usuários incluídos',
     checkout: (import.meta as any).env?.VITE_CHECKOUT_ENTERPRISE_URL,
-    features: ['Chamados sob política comercial', 'Multiempresa e múltiplas unidades', 'SSO, auditoria avançada e API', 'Gerente de implantação dedicado'],
+    features: ['Tudo do SAC Profissional', 'Auditoria OCP e documentos controlados', 'Multiempresa, SSO e auditoria avançada', 'Gerente de implantação dedicado'],
   },
 ];
 
