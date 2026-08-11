@@ -38,7 +38,7 @@ export default function App() {
   const isCommercialAlertsAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-alerts');
   const isCommercialCustomersAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-customers');
   const isMarketingAnalyticsAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('marketing-analytics');
-  const isPlatformAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase()==='/admin';
+  const isPlatformAdmin = typeof window !== 'undefined' && /^\/admin\/?$/.test(window.location.pathname.toLowerCase());
   const isDedicatedSacHost = typeof window !== 'undefined' &&
     window.location.hostname.toLowerCase() === 'apps.sacproh.gritnews.com.br';
 
