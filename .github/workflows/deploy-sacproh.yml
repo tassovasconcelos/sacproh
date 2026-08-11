@@ -39,6 +39,12 @@ jobs:
           VITE_COMMERCIAL_CHECKOUT_ENABLED: ${{ vars.COMMERCIAL_CHECKOUT_ENABLED || 'false' }}
         run: npm run build:web
 
+      # GitHub Pages nao possui fallback nativo para rotas de SPA. A copia
+      # faz /admin e as demais rotas entregarem o aplicativo em vez de 404.
+      - name: Habilitar rotas internas no GitHub Pages
+        shell: bash
+        run: cp dist/index.html dist/404.html
+
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
 
