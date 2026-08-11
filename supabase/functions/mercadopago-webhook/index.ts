@@ -22,6 +22,8 @@ async function validSignature(req: Request, dataId: string) {
   const requestId = req.headers.get('x-request-id') || '';
   const parts = Object.fromEntries(signature.split(',').map((part) => part.trim().split('=')));
   if (!secret || !parts.ts || !parts.v1 || !requestId || !dataId) return false;
+  const timestamp=Number(parts.ts);
+  if(!Number.isFinite(timestamp)||Math.abs(Date.now()-timestamp*1000)>5*60*1000)return false;
 
   const manifest = `id:${dataId.toLowerCase()};request-id:${requestId};ts:${parts.ts};`;
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
