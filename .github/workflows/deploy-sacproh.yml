@@ -113,7 +113,9 @@ jobs:
       # foi conferido no projeto; as migracoes comerciais continuam pendentes.
       - name: Sincronizar historico legado
         if: inputs.backend_operation == 'apply'
-        run: supabase migration repair --linked --status applied 001 002 003 004 005 006 007 008 009 010
+        run: |
+          supabase migration repair --linked --status reverted 010
+          supabase migration repair --linked --status applied 001 002 003 004 005 006 007 008 009
 
       - name: Revisar migracoes
         run: supabase db push --linked --include-all --dry-run
