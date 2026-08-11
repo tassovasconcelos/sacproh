@@ -44,7 +44,15 @@ requireText('supabase/functions/mercadopago-checkout/index.ts', /COMMERCIAL_CHEC
 
 requireText('.github/workflows/release-supabase.yml', /environment:\s*\$\{\{ inputs\.target \}\}/, 'Release precisa usar ambiente protegido.');
 requireText('.github/workflows/release-supabase.yml', /db push[^\n]*--dry-run/, 'Release precisa revisar migrações antes da aplicação.');
-forbidText('.github/workflows/deploy-sacproh.yml', /supabase (db push|functions deploy)/, 'Push comum não pode alterar o backend Supabase.');
+const pagesWorkflow=read('.github/workflows/deploy-sacproh.yml');
+if (/supabase (db push|functions deploy)/.test(pagesWorkflow)) {
+  if (!/supabase_backend:\s*\n\s*if:\s*github\.event_name == 'workflow_dispatch' && inputs\.backend_operation != 'none'/.test(pagesWorkflow)) {
+    failures.push('.github/workflows/deploy-sacproh.yml: Backend Supabase precisa permanecer restrito ao acionamento manual.');
+  }
+  if (!/COMMERCIAL_CHECKOUT_ENABLED:\s*["']false["']/.test(pagesWorkflow)) {
+    failures.push('.github/workflows/deploy-sacproh.yml: Checkout precisa permanecer desligado durante a homologacao manual.');
+  }
+}
 
 if (failures.length) {
   console.error('Proteções comerciais ausentes:\n- ' + failures.join('\n- '));
