@@ -108,6 +108,13 @@ jobs:
       - name: Vincular projeto
         run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
 
+      # O projeto SACPROH existia antes de o historico de migracoes ser
+      # adotado. Estes arquivos correspondem apenas ao schema legado que ja
+      # foi conferido no projeto; as migracoes comerciais continuam pendentes.
+      - name: Sincronizar historico legado
+        if: inputs.backend_operation == 'apply'
+        run: supabase migration repair --linked --status applied 001 002 003 004 005 006 007 008 009 010
+
       - name: Revisar migracoes
         run: supabase db push --linked --include-all --dry-run
 
