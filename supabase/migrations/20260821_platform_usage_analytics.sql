@@ -22,7 +22,7 @@ WITH CHECK (user_id = auth.uid() AND tenant_id = public.current_tenant_id());
 
 DROP POLICY IF EXISTS usage_read_tenant_admin ON public.platform_usage_events;
 CREATE POLICY usage_read_tenant_admin ON public.platform_usage_events FOR SELECT TO authenticated
-USING (tenant_id = public.current_tenant_id() AND public.current_role_code() IN ('SUPERADMIN','ADMIN_EMPRESA','DIRETORIA'));
+USING (tenant_id = public.current_tenant_id() AND public.user_role_code() IN ('SUPERADMIN','ADMIN_EMPRESA','DIRETORIA'));
 
 CREATE TABLE IF NOT EXISTS public.product_releases (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
