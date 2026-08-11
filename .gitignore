@@ -1,4 +1,5 @@
 node_modules/
+.workspace-node-modules/
 dist/
 .env
 .env.*
