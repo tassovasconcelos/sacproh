@@ -14,8 +14,8 @@ const forbidText = (path, pattern, message) => {
 requireText('supabase/migrations/20260810_commercial_trial_requests.sql', /enable row level security/i, 'RLS precisa estar habilitado.');
 requireText('supabase/migrations/20260810_commercial_trial_requests.sql', /force row level security/i, 'RLS precisa ser forçado.');
 requireText('supabase/migrations/20260810_commercial_trial_requests.sql', /revoke all[\s\S]*anon, authenticated/i, 'A tabela comercial não pode ser lida diretamente.');
-requireText('supabase/migrations/20260810_trial_provisioning.sql', /revoke all on function[\s\S]*public,anon,authenticated/i, 'O provisionamento deve permanecer restrito.');
-requireText('supabase/migrations/20260810_trial_provisioning.sql', /grant execute on function[\s\S]*service_role/i, 'Somente service_role deve executar o provisionamento.');
+requireText('supabase/migrations/202608100001_trial_provisioning.sql', /revoke all on function[\s\S]*public,anon,authenticated/i, 'O provisionamento deve permanecer restrito.');
+requireText('supabase/migrations/202608100001_trial_provisioning.sql', /grant execute on function[\s\S]*service_role/i, 'Somente service_role deve executar o provisionamento.');
 requireText('supabase/migrations/20260811_commercial_orders.sql', /force row level security/i, 'Pedidos comerciais precisam forçar RLS.');
 requireText('supabase/migrations/20260811_commercial_orders.sql', /contract_evidence_reference[\s\S]*contract_accepted_at/i, 'Pedido anual precisa manter evidência contratual.');
 requireText('supabase/migrations/20260812_billing_lifecycle.sql', /trg_billing_events_immutable/i, 'Eventos financeiros precisam ser imutáveis.');
