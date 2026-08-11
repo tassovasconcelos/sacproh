@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
-import { ArrowRight, BarChart3, Check, CreditCard, Headphones, LockKeyhole, ShieldCheck, Users } from 'lucide-react';
+import { ArrowRight, BarChart3, Check, CreditCard, Headphones, Instagram, LockKeyhole, ShieldCheck, Users } from 'lucide-react';
 import { startMercadoPagoCheckout } from '../../services/checkoutService';
 import { TrialRequestForm } from './TrialRequestForm';
+import {trackMarketingEvent} from '../../services/marketingAnalytics';
 
 type Plan = {
   code: 'START' | 'PRO' | 'ENTERPRISE';
@@ -74,6 +75,7 @@ export function SaasTrialPortal() {
         </a>
         <nav className="hidden gap-6 text-sm text-slate-300 md:flex" aria-label="Navegação principal">
           <a href="#recursos" className="hover:text-white">Recursos</a><a href="#trial" className="hover:text-white">Trial</a><a href="#planos" className="hover:text-white">Planos</a><a href="#seguranca" className="hover:text-white">Segurança</a>
+          <a href="https://www.instagram.com/grit.solucoes/" target="_blank" rel="noreferrer" onClick={()=>trackMarketingEvent('cta_instagram',{placement:'header'})} className="inline-flex items-center gap-1.5 hover:text-orange-300"><Instagram size={16}/>@grit.solucoes</a>
         </nav>
         <a href="#planos" className="rounded-xl bg-[#FF8500] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#E07500]">Conhecer planos</a>
       </div>
@@ -123,6 +125,6 @@ export function SaasTrialPortal() {
 
       <section id="seguranca" className="border-t border-white/10 bg-slate-900/50 px-5 py-16"><div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-[.8fr_1.2fr]"><div><span className="grid h-12 w-12 place-items-center rounded-xl bg-emerald-400/10 text-emerald-300"><LockKeyhole/></span><h2 className="mt-5 text-3xl font-black">Segurança desde a arquitetura</h2><p className="mt-3 text-slate-400">Cada empresa acessa somente seus próprios dados, com autenticação, trilha de auditoria e políticas no banco.</p></div><div className="grid gap-3 sm:grid-cols-2">{['Isolamento multiempresa (RLS)','Controle de acesso por função','HTTPS e conteúdo protegido','Auditoria de alterações','Backups e continuidade','Adequação progressiva à LGPD'].map(item=><div key={item} className="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-950 p-4"><ShieldCheck className="text-emerald-400" size={19}/><span className="text-sm font-semibold">{item}</span></div>)}</div></div></section>
     </main>
-    <footer className="border-t border-white/10 px-5 py-8 text-center text-xs text-slate-500">© {new Date().getFullYear()} SAC 4.0 • Comercial: gritsolucoes@gmail.com</footer>
+    <footer className="border-t border-white/10 px-5 py-8 text-center text-xs text-slate-500"><p>© {new Date().getFullYear()} SAC 4.0 • Comercial: gritsolucoes@gmail.com</p><a href="https://www.instagram.com/grit.solucoes/" target="_blank" rel="noreferrer" onClick={()=>trackMarketingEvent('cta_instagram',{placement:'footer'})} className="mt-3 inline-flex items-center gap-2 font-bold text-orange-300"><Instagram size={16}/>Siga @grit.solucoes</a></footer>
   </div>;
 }

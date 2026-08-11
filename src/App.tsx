@@ -18,6 +18,7 @@ const CommercialTrialAdmin = lazy(() => import('./components/commercial/Commerci
 const CommercialOrderAdmin = lazy(() => import('./components/commercial/CommercialOrderAdmin').then(module => ({ default: module.CommercialOrderAdmin })));
 const CommercialAlertsAdmin = lazy(() => import('./components/commercial/CommercialAlertsAdmin').then(module => ({ default: module.CommercialAlertsAdmin })));
 const CommercialCustomersAdmin = lazy(() => import('./components/commercial/CommercialCustomersAdmin').then(module => ({ default: module.CommercialCustomersAdmin })));
+const MarketingAnalyticsAdmin = lazy(() => import('./components/commercial/MarketingAnalyticsAdmin').then(module => ({ default: module.MarketingAnalyticsAdmin })));
 
 const ModuleLoading = () => <div className="min-h-[240px] flex items-center justify-center text-sm font-semibold text-slate-500">Carregando módulo...</div>;
 
@@ -35,6 +36,7 @@ export default function App() {
   const isCommercialOrderAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-orders');
   const isCommercialAlertsAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-alerts');
   const isCommercialCustomersAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-customers');
+  const isMarketingAnalyticsAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('marketing-analytics');
   const isDedicatedSacHost = typeof window !== 'undefined' &&
     window.location.hostname.toLowerCase() === 'apps.sacproh.gritnews.com.br';
 
@@ -266,6 +268,10 @@ export default function App() {
 
   if (isSaasTrialHost && isCommercialCustomersAdmin) {
     return <Suspense fallback={<ModuleLoading />}><CommercialCustomersAdmin /></Suspense>;
+  }
+
+  if (isSaasTrialHost && isMarketingAnalyticsAdmin) {
+    return <Suspense fallback={<ModuleLoading />}><MarketingAnalyticsAdmin /></Suspense>;
   }
 
   if (isSaasTrialHost && isCommercialAlertsAdmin) {
