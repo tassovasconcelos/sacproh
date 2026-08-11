@@ -34,6 +34,28 @@ Deno.serve(async req=>{
     const {data:profile}=await admin.from('profiles').select('role_code,is_active').eq('id',user.id).maybeSingle();
     if(!profile?.is_active||profile.role_code!=='SUPERADMIN'||!allowedEmails.has(user.email.toLowerCase()))return response(origin,{error:'Acesso comercial não autorizado.'},403);
     const body=await req.json();
+    if(body.action==='platform_overview'){
+      const [{data:trials,error:trialsError},{data:subscriptions,error:subscriptionsError},{data:orders,error:ordersError},{data:alerts,error:alertsError},{data:profiles,error:profilesError}]=await Promise.all([
+        admin.from('commercial_trial_requests').select('id,status,created_at,trial_ends_at,company_name,work_email,segment,provisioned_tenant_id').order('created_at',{ascending:false}).limit(200),
+        admin.from('tenant_subscriptions').select('id,tenant_id,status,seat_limit,trial_ends_at,current_period_end,billing_email,tenant:tenants(name,trade_name,document,is_active),plan:saas_plans(code,name,included_seats)').order('updated_at',{ascending:false}).limit(300),
+        admin.from('commercial_orders').select('id,tenant_id,status,plan_code,expected_amount,currency,last_payment_status,created_at,updated_at').order('created_at',{ascending:false}).limit(200),
+        admin.from('commercial_alerts').select('id,severity,alert_type,message,status,created_at,order_id').eq('status','OPEN').order('created_at',{ascending:false}).limit(100),
+        admin.from('profiles').select('id,tenant_id,full_name,email,role_code,is_active,created_at,tenant:tenants(name,trade_name)').order('created_at',{ascending:false}).limit(1000),
+      ]);
+      const firstError=trialsError||subscriptionsError||ordersError||alertsError||profilesError;if(firstError)throw firstError;
+      return response(origin,{trials:trials||[],subscriptions:subscriptions||[],orders:orders||[],alerts:alerts||[],users:profiles||[]});
+    }
+    if(body.action==='update_platform_user'){
+      const profileId=clean(body.id,40),roleCode=clean(body.roleCode,40).toUpperCase(),isActive=body.isActive;
+      const assignableRoles=new Set(['DIRETORIA','RESPONSAVEL_TECNICA','TECNICO','GERENTE_LOJA','SAC','LOGISTICA','ADMIN_EMPRESA']);
+      if(!/^[0-9a-f-]{36}$/i.test(profileId)||!assignableRoles.has(roleCode)||typeof isActive!=='boolean')return response(origin,{error:'Usuário, perfil ou situação inválidos.'},400);
+      if(profileId===user.id)return response(origin,{error:'O superadmin não pode alterar o próprio acesso por este painel.'},409);
+      const {data:target,error:targetError}=await admin.from('profiles').select('id,tenant_id,role_code,is_active,email').eq('id',profileId).single();if(targetError)throw targetError;
+      if(target.role_code==='SUPERADMIN')return response(origin,{error:'Outro superadmin não pode ser alterado por este painel.'},403);
+      const {data:updated,error:updateError}=await admin.from('profiles').update({role_code:roleCode,is_active:isActive}).eq('id',profileId).select('id,tenant_id,full_name,email,role_code,is_active').single();if(updateError)throw updateError;
+      const {error:auditError}=await admin.from('platform_admin_actions').insert({actor_id:user.id,target_user_id:profileId,tenant_id:target.tenant_id,action:isActive?'USER_ACCESS_UPDATED':'USER_BLOCKED',details:{previous_role:target.role_code,new_role:roleCode,previous_active:target.is_active,new_active:isActive,target_email:target.email}});if(auditError)throw auditError;
+      return response(origin,{item:updated});
+    }
     if(body.action==='list'){
       let query=admin.from('commercial_trial_requests').select('*').order('created_at',{ascending:false}).limit(200);
       if(body.status&&allowedStatuses.has(body.status))query=query.eq('status',body.status);
@@ -79,7 +101,7 @@ Deno.serve(async req=>{
         const {data:invited,error:inviteError}=await admin.auth.admin.inviteUserByEmail(trial.work_email,{redirectTo,data:{full_name:trial.contact_name,tenant_id:tenantId}});
         const invitedUser=invited.user||(inviteError?await findInvitedUser(admin,trial.work_email,tenantId):null);
         if(!invitedUser)throw inviteError||new Error('Convite não criado.');adminUserId=invitedUser.id;
-        const {error:profileError}=await admin.from('profiles').upsert({id:adminUserId,tenant_id:tenantId,full_name:trial.contact_name,email:trial.work_email,role_code:'SUPERADMIN',is_active:true},{onConflict:'id'});if(profileError)throw profileError;
+        const {error:profileError}=await admin.from('profiles').upsert({id:adminUserId,tenant_id:tenantId,full_name:trial.contact_name,email:trial.work_email,role_code:'ADMIN_EMPRESA',is_active:true},{onConflict:'id'});if(profileError)throw profileError;
       }
       const {error:linkError}=await admin.from('commercial_trial_requests').update({provisioned_admin_id:adminUserId,updated_at:new Date().toISOString()}).eq('id',id);if(linkError)throw linkError;
       await notifyCommercial(`[SAC 4.0] Trial ativado: ${trial.company_name}`,`Empresa: ${trial.company_name}\nAdministrador: ${trial.contact_name} <${trial.work_email}>\nTenant: ${tenantId}\nTrial de 15 dias e 1 usuário provisionado.`,`provision-${id}`);

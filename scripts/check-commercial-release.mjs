@@ -25,6 +25,7 @@ requireText('supabase/migrations/20260813_tenant_branding.sql', /file_size_limit
 requireText('supabase/migrations/20260813_tenant_branding.sql', /user_role_code\(\)[\s\S]*SUPERADMIN[\s\S]*ADMIN_EMPRESA/i, 'Somente administradores podem alterar a marca.');
 requireText('supabase/migrations/20260814_subscription_management.sql', /manage_commercial_subscription[\s\S]*security definer/i, 'Bloqueio e cancelamento precisam ser transacionais.');
 requireText('supabase/migrations/20260814_subscription_management.sql', /trg_subscription_actions_immutable/i, 'Ações de assinatura precisam ser imutáveis.');
+requireText('supabase/migrations/20260817_platform_admin_security.sql', /trg_platform_admin_actions_immutable/i, 'Ações do superadmin precisam ser imutáveis.');
 
 for (const path of ['supabase/functions/request-trial/index.ts','supabase/functions/manage-trials/index.ts','supabase/functions/mercadopago-checkout/index.ts']) {
   requireText(path, /allowedOrigins/, 'Função pública precisa de allowlist de origem.');
@@ -32,8 +33,11 @@ for (const path of ['supabase/functions/request-trial/index.ts','supabase/functi
 }
 requireText('supabase/functions/manage-trials/index.ts', /COMMERCIAL_ADMIN_EMAILS/, 'Backoffice precisa de allowlist privada de operadores.');
 requireText('supabase/functions/manage-trials/index.ts', /role_code!=='SUPERADMIN'/, 'Backoffice precisa validar o perfil de plataforma.');
+requireText('supabase/functions/manage-trials/index.ts', /role_code:'ADMIN_EMPRESA'/, 'Cliente provisionado não pode receber SUPERADMIN.');
+forbidText('supabase/functions/manage-trials/index.ts', /trial\.contact_name,email:trial\.work_email,role_code:'SUPERADMIN'/, 'Trial não pode criar superadmin global.');
 requireText('supabase/functions/request-trial/index.ts', /gritsolucoes@gmail\.com/, 'Alertas de novos leads precisam apontar para o e-mail comercial oficial.');
 requireText('supabase/functions/mercadopago-webhook/index.ts', /timingSafeEqual/, 'Webhook precisa comparar a assinatura com proteção temporal.');
+requireText('supabase/functions/mercadopago-webhook/index.ts', /5\*60\*1000/, 'Webhook precisa rejeitar assinaturas antigas contra replay.');
 requireText('supabase/functions/mercadopago-webhook/index.ts', /paymentMatchesOrder/, 'Pagamento aprovado precisa ser conciliado com o pedido.');
 requireText('supabase/functions/mercadopago-webhook/index.ts', /charged_back[\s\S]*SUSPENDED/, 'Chargeback precisa suspender a assinatura.');
 requireText('supabase/functions/mercadopago-checkout/index.ts', /COMMERCIAL_CHECKOUT_ENABLED['"]\)\s*!==\s*['"]true/, 'Checkout deve permanecer bloqueado por padrão.');
