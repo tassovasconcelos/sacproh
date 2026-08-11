@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   LayoutDashboard, Ticket, CheckSquare2, Wrench, Truck, UploadCloud, 
-  BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe, ScanSearch, ClipboardCheck
+  BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe, ScanSearch, ClipboardCheck, ShieldAlert
 } from 'lucide-react';
 
 export type NavView = 
@@ -16,6 +16,7 @@ export type NavView =
   | 'reports' 
   | 'traceability'
   | 'regulatory'
+  | 'risk'
   | 'users' 
   | 'settings' 
   | 'audit';
@@ -43,12 +44,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard Executivo', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'tickets', label: 'Chamados SAC', icon: <Ticket className="w-4 h-4" />, badge: openTicketsCount },
     { id: 'quality', label: 'Qualidade & 5W2H', icon: <CheckSquare2 className="w-4 h-4" /> },
+    ...(['SUPERADMIN','DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA'].includes(currentUserRole) ? [{ id: 'risk' as NavView, label: 'Riscos, CAPA & Auditorias', icon: <ShieldAlert className="w-4 h-4" /> }] : []),
     { id: 'technical', label: 'Assistência Técnica (OS)', icon: <Wrench className="w-4 h-4" /> },
     { id: 'logistics', label: 'Logística & Coletas', icon: <Truck className="w-4 h-4" /> },
     { id: 'knowledge', label: 'Base de Conhecimento', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'reports', label: 'Relatórios Gerenciais', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'traceability', label: 'Rastreabilidade & Lotes', icon: <ScanSearch className="w-4 h-4" /> },
-    ...(currentUserRole === 'RESPONSAVEL_TECNICA' ? [{ id: 'regulatory' as NavView, label: 'Relatórios Anvisa & Inmetro', icon: <ClipboardCheck className="w-4 h-4" /> }] : []),
+    ...(['SUPERADMIN','RESPONSAVEL_TECNICA'].includes(currentUserRole) ? [{ id: 'regulatory' as NavView, label: 'Relatórios Anvisa & Inmetro', icon: <ClipboardCheck className="w-4 h-4" /> }] : []),
   ];
 
   const adminMenuItems: { id: NavView; label: string; icon: React.ReactNode }[] = [
