@@ -1,5 +1,6 @@
+
 import { 
-  Ticket, Customer, Product, ProductLot, LotAction, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage, Tenant
+  Ticket, Customer, Product, ProductLot, LotAction, FactoryFollowup, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage, Tenant
 } from '../types';
 import { 
   mockTickets, mockCustomers, mockProducts, mockQualityPlans, mockTechnicalCases, mockLogisticsCases, mockAuditLogs, mockUsers, mockServiceOrders 
@@ -67,6 +68,7 @@ const productFromDb = (row: any): Product => ({
 const productLotFromDb = (row:any):ProductLot => ({
   id:row.id, tenantId:row.tenant_id, productId:row.product_id, lotNumber:row.lot_number,
   manufacturingDate:row.manufacturing_date || undefined, expirationDate:row.expiration_date || undefined,
+  expirationMode:row.expiration_mode || (row.expiration_date ? 'DETERMINED' : 'NOT_INFORMED'),
   receivedQuantity:Number(row.received_quantity || 0), soldQuantity:Number(row.sold_quantity || 0),
   stockQuantity:Number(row.stock_quantity || 0), status:row.status,
   supplierDocument:row.supplier_document || undefined, notes:row.notes || undefined,
@@ -77,6 +79,17 @@ const lotActionFromDb=(row:any):LotAction=>({id:row.id,tenantId:row.tenant_id,pr
   actionType:row.action_type,status:row.status,reason:row.reason,ownerName:row.owner_name,
   dueDate:row.due_date||undefined,affectedCustomers:Number(row.affected_customers||0),affectedUnits:Number(row.affected_units||0),
   createdAt:row.created_at,completedAt:row.completed_at||undefined});
+
+const factoryFollowupFromDb=(row:any):FactoryFollowup=>({
+  id:row.id,tenantId:row.tenant_id,productLotId:row.product_lot_id,manufacturerName:row.manufacturer_name,
+  contactName:row.contact_name||undefined,contactEmail:row.contact_email||undefined,subject:row.subject,
+  problemSummary:row.problem_summary,requestedRepair:row.requested_repair||undefined,
+  requestedImprovement:row.requested_improvement||undefined,requestedParts:row.requested_parts||undefined,
+  replacementQuantity:Number(row.replacement_quantity||0),protocolReference:row.protocol_reference||undefined,
+  status:row.status,ownerName:row.owner_name,dueDate:row.due_date||undefined,lastContactAt:row.last_contact_at||undefined,
+  nextFollowupAt:row.next_followup_at||undefined,manufacturerResponse:row.manufacturer_response||undefined,
+  createdAt:row.created_at,updatedAt:row.updated_at
+});
 
 const ticketFromDb = (row: any): Ticket => ({
   id: row.id, tenantId: row.tenant_id, protocol: row.protocol, unitId: row.unit_id || undefined,
@@ -332,209 +345,7 @@ export const apiService = {
       const area = assignedArea.toLocaleLowerCase('pt-BR');
       const nextStatus: TicketStatus = area.includes('técnica') || area.includes('tecnica') ? 'SENT_TO_TECHNICAL'
         : area.includes('logística') || area.includes('logistica') ? 'SENT_TO_LOGISTICS' : current.status;
-      const { data, error } = await supabase.from('tickets').update({ assigned_area: assignedArea, assigned_to: assignedToId || null, status: nextStatus, updated_at: new Date().toISOString() })
-        .eq('id', ticketId).select('*, customer:customers(name,document), carrier:carriers(legal_name,trade_name), items:ticket_items(*)').single();
-      if (error || !data) throw new Error(`Não foi possível encaminhar o chamado: ${error?.message || ''}`);
-      const { data: actor } = await supabase.auth.getUser();
-      await Promise.all([
-        current.status !== nextStatus ? supabase.from('ticket_status_history').insert({ ticket_id: ticketId, previous_status: current.status, new_status: nextStatus, changed_by: actor.user?.id || null, changed_by_name: userEmail || 'Usuário', notes }) : Promise.resolve(),
-        supabase.from('audit_logs').insert({ tenant_id: current.tenant_id, user_id: actor.user?.id || null, user_email: userEmail || actor.user?.email || null, action: 'TICKET_DISPATCHED', entity: 'TICKET', entity_id: ticketId, details: { assigned_area: assignedArea, assigned_to: assignedToId || null, assigned_to_name: assignedToName || null, notes: notes || null } })
-      ]);
-      return ticketFromDb(data);
-    }
-    const ticket = localTickets.find(t => t.id === ticketId);
-    if (!ticket) return null;
-
-    ticket.assignedArea = assignedArea;
-    if (assignedToId) ticket.assignedTo = assignedToId;
-    if (assignedToName) ticket.assignedToName = assignedToName;
-    ticket.updatedAt = new Date().toISOString();
-
-    // Auto update status if routing to Technical or Logistics
-    if (assignedArea.toLowerCase().includes('técnica') || assignedArea.toLowerCase().includes('tecnica')) {
-      ticket.status = 'SENT_TO_TECHNICAL';
-    } else if (assignedArea.toLowerCase().includes('logística') || assignedArea.toLowerCase().includes('logistica')) {
-      ticket.status = 'SENT_TO_LOGISTICS';
-    }
-
-    localAuditLogs.unshift({
-      id: 'al-' + Date.now(),
-      userId: assignedToId || 'u001',
-      userEmail: userEmail || 'sistema@procirurgica.com.br',
-      action: 'TICKET_DISPATCHED',
-      entity: 'TICKET',
-      entityId: ticketId,
-      details: `Chamado ${ticket.protocol} direcionado para área: ${assignedArea}, Responsável: ${assignedToName || 'Não especificado'}. Obs: ${notes || 'Sem observações'}`,
-      createdAt: new Date().toISOString()
-    });
-
-    return ticket;
-  },
-
-  // --- SERVICE ORDERS (ORDENS DE SERVIÇO - OS) ---
-  async getServiceOrders(): Promise<ServiceOrder[]> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('service_orders').select('*, ticket:tickets(protocol,customer:customers(name)), technician:profiles(full_name)').order('opened_at', { ascending: false });
-      if (error) throw new Error(`Não foi possível carregar as ordens de serviço: ${error.message}`);
-      return (data || []).map((row:any) => ({ id:row.id, osNumber:row.os_number, ticketId:row.ticket_id, protocol:row.ticket?.protocol || '', customerName:row.ticket?.customer?.name || '', equipmentName:row.equipment_name, serialNumber:row.serial_number || undefined, technicianId:row.technician_id || '', technicianName:row.technician?.full_name || '', serviceType:row.service_type, urgency:'MEDIUM', diagnostic:row.diagnostic || '', partsReplaced:row.parts_replaced || undefined, estimatedCost:Number(row.estimated_cost || 0), status:row.status, openedAt:row.opened_at, closedAt:row.completed_at || undefined }));
-    }
-    return localServiceOrders;
-  },
-
-  async createServiceOrder(osData: Omit<ServiceOrder, 'id' | 'osNumber' | 'openedAt'>): Promise<ServiceOrder> {
-    const seq = (localServiceOrders.length + 1).toString().padStart(4, '0');
-    const year = new Date().getFullYear();
-    const osNumber = `OS-${year}-${seq}`;
-
-    const newOS: ServiceOrder = {
-      ...osData,
-      id: 'os-' + Date.now(),
-      osNumber,
-      openedAt: new Date().toISOString()
-    };
-
-    if (isSupabaseConfigured) {
-      const { data: ticket, error: ticketError } = await supabase.from('tickets').select('tenant_id').eq('id', osData.ticketId).single();
-      if (ticketError || !ticket) throw new Error('Chamado da ordem de serviço não encontrado.');
-      const { data: generatedOS, error: sequenceError } = await supabase.rpc('generate_service_order_number',{p_tenant_id:ticket.tenant_id});
-      if(sequenceError) throw new Error(`Não foi possível gerar a sequência da OS: ${sequenceError.message}`);
-      const officialOSNumber=generatedOS || osNumber;
-      const { data, error } = await supabase.from('service_orders').insert({ tenant_id:ticket.tenant_id, ticket_id:osData.ticketId, os_number:officialOSNumber, technician_id:osData.technicianId || null, service_type:osData.serviceType, equipment_name:osData.equipmentName, serial_number:osData.serialNumber || null, diagnostic:osData.diagnostic || null, parts_replaced:osData.partsReplaced || null, estimated_cost:osData.estimatedCost, status:osData.status }).select().single();
-      if (error || !data) throw new Error(`Não foi possível criar a ordem de serviço: ${error?.message || ''}`);
-      await supabase.from('audit_logs').insert({ tenant_id:ticket.tenant_id, user_id:osData.technicianId || null, action:'OS_CREATED', entity:'SERVICE_ORDER', entity_id:data.id, details:{ os_number:officialOSNumber, ticket_id:osData.ticketId } });
-      return { ...newOS, id:data.id, osNumber:officialOSNumber, openedAt:data.opened_at };
-    }
-
-    localServiceOrders.unshift(newOS);
-
-    // Also link technical case
-    const techCase: TechnicalCase = {
-      id: 'tc-' + Date.now(),
-      ticketId: osData.ticketId,
-      subprotocol: `${osData.protocol}-AT${seq}`,
-      technicianId: osData.technicianId,
-      technicianName: osData.technicianName,
-      diagnosticReport: osData.diagnostic,
-      replacedParts: osData.partsReplaced,
-      status: 'IN_ANALYSIS',
-      cost: osData.estimatedCost
-    };
-    localTechnicalCases.unshift(techCase);
-
-    // Add Audit Log
-    localAuditLogs.unshift({
-      id: 'al-' + Date.now(),
-      userId: osData.technicianId || 'u002',
-      userEmail: 'tecnico@procirurgica.com.br',
-      action: 'OS_CREATED',
-      entity: 'SERVICE_ORDER',
-      entityId: newOS.id,
-      details: `Abertura da Ordem de Serviço ${osNumber} para o equipamento ${osData.equipmentName} do cliente ${osData.customerName}`,
-      createdAt: new Date().toISOString()
-    });
-
-    return newOS;
-  },
-
-  async updateServiceOrder(order: ServiceOrder, changes: Partial<ServiceOrder>): Promise<ServiceOrder> {
-    const { data, error } = await supabase.from('service_orders').update({
-      technician_id:changes.technicianId ?? order.technicianId ?? null, service_type:changes.serviceType ?? order.serviceType,
-      equipment_name:changes.equipmentName ?? order.equipmentName, serial_number:changes.serialNumber ?? order.serialNumber ?? null,
-      diagnostic:changes.diagnostic ?? order.diagnostic ?? null, parts_replaced:changes.partsReplaced ?? order.partsReplaced ?? null,
-      estimated_cost:changes.estimatedCost ?? order.estimatedCost, status:changes.status ?? order.status,
-      completed_at:(changes.status ?? order.status)==='COMPLETED' ? new Date().toISOString() : null
-    }).eq('id',order.id).select().single();
-    if(error || !data) throw new Error(`Não foi possível editar a OS: ${error?.message || ''}`);
-    return {...order,...changes,id:data.id,openedAt:data.opened_at,closedAt:data.completed_at || undefined};
-  },
-
-  async deleteServiceOrder(order: ServiceOrder, reason: string): Promise<void> {
-    const { error } = await supabase.rpc('delete_service_order_controlled',{p_os_id:order.id,p_reason:reason});
-    if(error) throw new Error(`Não foi possível excluir a OS: ${error.message}`);
-  },
-
-  // --- USER MANAGEMENT ---
-  async getCurrentProfile(userId: string): Promise<UserProfile | null> {
-    if (!isSupabaseConfigured) return localUsers.find(u => u.id === userId) || null;
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    return error || !data ? null : profileFromDb(data);
-  },
-
-  async getUsers(): Promise<UserProfile[]> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('profiles').select('*').order('full_name');
-      if (!error && data) return data.map(profileFromDb);
-    }
-    return localUsers;
-  },
-
-  async createUser(userData: Omit<UserProfile, 'id'>): Promise<UserProfile> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase.functions.invoke('invite-user', { body: userData });
-      if (error || !data?.profile) {
-        const { data: existing } = await supabase.from('profiles').select('*').ilike('email', userData.email.trim()).maybeSingle();
-        if (existing) return profileFromDb(existing);
-        let functionMessage='';
-        try { functionMessage=(await (error as any)?.context?.json?.())?.error || ''; } catch { /* resposta sem JSON */ }
-        throw new Error(data?.error || functionMessage || error?.message || 'Não foi possível convidar o usuário.');
-      }
-      return profileFromDb(data.profile);
-    }
-    const newUser: UserProfile = {
-      ...userData,
-      id: 'u-' + Date.now()
-    };
-    localUsers.unshift(newUser);
-    return newUser;
-  },
-
-  async sendPasswordReset(email: string): Promise<void> {
-    const redirectTo = `${window.location.origin}/sacproh/`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-    if (error) {
-      if (/rate limit|too many/i.test(error.message)) throw new Error('Usuário cadastrado, mas o limite temporário de e-mails do Supabase foi atingido. Aguarde antes de reenviar ou configure um servidor SMTP próprio.');
-      throw new Error(`Não foi possível enviar o e-mail: ${error.message}`);
-    }
-  },
-
-  async updateUser(userId: string, updateData: Partial<UserProfile>): Promise<UserProfile | null> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('profiles').update({
-        full_name: updateData.fullName, email: updateData.email, phone: updateData.phone || null,
-        job_title: updateData.jobTitle || null, department: updateData.department || null,
-        employee_code: updateData.employeeCode || null, manager_name: updateData.managerName || null,
-        notes: updateData.notes || null, role_code: updateData.roleCode, is_active: updateData.isActive,
-        updated_at: new Date().toISOString()
-      }).eq('id', userId).select().single();
-      if (error) throw new Error(`Não foi possível salvar o usuário: ${error.message}`);
-      return profileFromDb(data);
-    }
-    const idx = localUsers.findIndex(u => u.id === userId);
-    if (idx === -1) return null;
-    localUsers[idx] = { ...localUsers[idx], ...updateData };
-    return localUsers[idx];
-  },
-
-  // --- RESET SYSTEM DATA ("ZERAR AS INFORMAÇÕES") ---
-  async resetAllData(): Promise<boolean> {
-    if (isSupabaseConfigured) {
-      const { error } = await supabase.rpc('reset_operational_sac_data');
-      if (error) throw new Error(`Não foi possível zerar os registros: ${error.message}`);
-      return true;
-    }
-    localTickets = [];
-    localQualityPlans = [];
-    localTechnicalCases = [];
-    localLogisticsCases = [];
-    localServiceOrders = [];
-    
-    localAuditLogs.unshift({
-      id: 'al-' + Date.now(),
-      userId: 'admin',
-      userEmail: 'admin@procirurgica.com.br',
-      action: 'DATA_RESET',
-      entity: 'SYSTEM',
-      details: 'Todas as informações de chamados, ordens de serviço, planos 5W2H e históricos foram zeradas via painel administrativo.',
+      const { data, …2939 tokens truncated…istóricos foram zeradas via painel administrativo.',
       createdAt: new Date().toISOString()
     });
 
@@ -613,6 +424,7 @@ export const apiService = {
     const { data,error } = await supabase.from('product_lots').insert({
       tenant_id:lot.tenantId, product_id:lot.productId, lot_number:lot.lotNumber,
       manufacturing_date:lot.manufacturingDate || null, expiration_date:lot.expirationDate || null,
+      expiration_mode:lot.expirationMode,
       received_quantity:lot.receivedQuantity, sold_quantity:lot.soldQuantity, stock_quantity:lot.stockQuantity,
       status:lot.status, supplier_document:lot.supplierDocument || null, notes:lot.notes || null
     }).select().single();
@@ -639,6 +451,27 @@ export const apiService = {
       affected_customers:action.affectedCustomers,affected_units:action.affectedUnits}).select().single();
     if(error||!data)throw new Error(`Não foi possível registrar a ação: ${error?.message||''}`);
     return lotActionFromDb(data);
+  },
+
+  async getFactoryFollowups(tenantId:string):Promise<FactoryFollowup[]> {
+    if(!isSupabaseConfigured)return [];
+    const{data,error}=await supabase.from('factory_followups').select('*').eq('tenant_id',tenantId).order('updated_at',{ascending:false});
+    if(error)throw new Error(`Não foi possível carregar o follow-up da fábrica: ${error.message}`);
+    return(data||[]).map(factoryFollowupFromDb);
+  },
+
+  async createFactoryFollowup(item:Omit<FactoryFollowup,'id'|'createdAt'|'updatedAt'>):Promise<FactoryFollowup>{
+    const{data,error}=await supabase.from('factory_followups').insert({
+      tenant_id:item.tenantId,product_lot_id:item.productLotId,manufacturer_name:item.manufacturerName,
+      contact_name:item.contactName||null,contact_email:item.contactEmail||null,subject:item.subject,
+      problem_summary:item.problemSummary,requested_repair:item.requestedRepair||null,
+      requested_improvement:item.requestedImprovement||null,requested_parts:item.requestedParts||null,
+      replacement_quantity:item.replacementQuantity,protocol_reference:item.protocolReference||null,
+      status:item.status,owner_name:item.ownerName,due_date:item.dueDate||null,last_contact_at:item.lastContactAt||null,
+      next_followup_at:item.nextFollowupAt||null,manufacturer_response:item.manufacturerResponse||null
+    }).select().single();
+    if(error||!data)throw new Error(`Não foi possível registrar o follow-up da fábrica: ${error?.message||''}`);
+    return factoryFollowupFromDb(data);
   },
 
   async getCarriers(): Promise<Carrier[]> {
@@ -854,3 +687,4 @@ export const apiService = {
     return `Prezado(a) ${ticket.customerName},\n\nAgradecemos o contato com o SAC da Procirúrgica. Registramos a sua solicitação sob o protocolo ${ticket.protocol}.\n\nNossa equipe técnica e farmacêutica responsável iniciou a análise da ocorrência relacionada ao item ${ticket.items[0]?.productName || ''}. Entraremos em contato com a solução e procedimentos para agendamento de coleta/visita em até 24 horas úteis.\n\nAtenciosamente,\nEquipe de Pós-Venda & Qualidade - Procirúrgica`;
   }
 };
+
