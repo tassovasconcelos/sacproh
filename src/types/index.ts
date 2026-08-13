@@ -1,4 +1,5 @@
-export type UserRole = 
+
+export type UserRole =
   | 'SUPERADMIN' 
   | 'DIRETORIA' 
   | 'RESPONSAVEL_TECNICA' 
@@ -88,6 +89,7 @@ export interface ProductLot {
   lotNumber: string;
   manufacturingDate?: string;
   expirationDate?: string;
+  expirationMode: 'DETERMINED' | 'INDETERMINATE' | 'NOT_INFORMED';
   receivedQuantity: number;
   soldQuantity: number;
   stockQuantity: number;
@@ -365,5 +367,15 @@ export interface AuditLog {
   entityId?: string;
   details: string;
   createdAt: string;
+}
+
+export interface FactoryFollowup {
+  id: string; tenantId: string; productLotId: string; manufacturerName: string;
+  contactName?: string; contactEmail?: string; subject: string; problemSummary: string;
+  requestedRepair?: string; requestedImprovement?: string; requestedParts?: string;
+  replacementQuantity: number; protocolReference?: string;
+  status: 'DRAFT'|'SENT'|'ACKNOWLEDGED'|'IN_ANALYSIS'|'PARTS_SENT'|'REPAIR_IN_PROGRESS'|'COMPLETED'|'CANCELLED';
+  ownerName: string; dueDate?: string; lastContactAt?: string; nextFollowupAt?: string;
+  manufacturerResponse?: string; createdAt: string; updatedAt: string;
 }
 
