@@ -141,9 +141,9 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
       <div className="bg-[#0B2343] text-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-700 overflow-hidden text-xs">
         <div className="bg-[#071325] p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <img src="/grit-logo.png" alt="" aria-hidden="true" className="h-12 w-28 object-cover object-center" />
+            <img src="/procirurgica-logo.png" alt="Procirúrgica" className="h-10 w-auto object-contain" />
             <div>
-              <strong className="mb-1.5 block text-sm tracking-wide text-white">SAC 4.0 · GRIT</strong>
+              <strong className="mb-1.5 block text-sm tracking-wide text-white">SACPROH · Procirúrgica</strong>
               <h3 className="font-extrabold text-sm text-white">Área Restrita ADM</h3>
               <p className="text-[11px] text-slate-400">Autenticação segura pelo Supabase</p>
             </div>
@@ -214,3 +214,4 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
     </div>
   );
 };
+
