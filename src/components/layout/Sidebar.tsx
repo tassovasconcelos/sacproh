@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   LayoutDashboard, Ticket, CheckSquare2, Wrench, Truck, UploadCloud, 
@@ -30,6 +29,7 @@ interface SidebarProps {
   onOpenAdminLogin: () => void;
   onGoToPortal: () => void;
   currentUserRole: string;
+  enabledModules?: string[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -39,20 +39,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isAdminAuthenticated,
   onOpenAdminLogin,
   onGoToPortal,
-  currentUserRole
+  currentUserRole,
+  enabledModules = ['SAC']
 }) => {
-  const opMenuItems: { id: NavView; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'dashboard', label: 'Dashboard Executivo', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { id: 'tickets', label: 'Chamados SAC', icon: <Ticket className="w-4 h-4" />, badge: openTicketsCount },
-    { id: 'quality', label: 'Qualidade & 5W2H', icon: <CheckSquare2 className="w-4 h-4" /> },
-    ...(['SUPERADMIN','DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SAC','TECNICO'].includes(currentUserRole) ? [{ id: 'risk' as NavView, label: 'Riscos, CAPA & Auditorias', icon: <ShieldAlert className="w-4 h-4" /> }] : []),
-    { id: 'technical', label: 'Assistência Técnica (OS)', icon: <Wrench className="w-4 h-4" /> },
-    { id: 'logistics', label: 'Logística & Coletas', icon: <Truck className="w-4 h-4" /> },
-    { id: 'knowledge', label: 'Base de Conhecimento', icon: <BookOpen className="w-4 h-4" /> },
-    { id: 'reports', label: 'Relatórios Gerenciais', icon: <BarChart3 className="w-4 h-4" /> },
-    { id: 'traceability', label: 'Rastreabilidade & Lotes', icon: <ScanSearch className="w-4 h-4" /> },
-    ...(['SUPERADMIN','RESPONSAVEL_TECNICA'].includes(currentUserRole) ? [{ id: 'regulatory' as NavView, label: 'Relatórios Anvisa & Inmetro', icon: <ClipboardCheck className="w-4 h-4" /> }] : []),
+  const contracted = (code:string) => currentUserRole === 'SUPERADMIN' || code === 'SAC' || enabledModules.includes(code);
+  const roleAllows = (roles:string[]) => currentUserRole === 'SUPERADMIN' || roles.includes(currentUserRole);
+  const allOpMenuItems: { id: NavView; label: string; icon: React.ReactNode; badge?: number; module:string; roles:string[] }[] = [
+    { id:'dashboard',label:'Dashboard Executivo',icon:<LayoutDashboard className="w-4 h-4"/>,module:'SAC',roles:['DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SAC','TECNICO','LOGISTICA','GERENTE_LOJA'] },
+    { id:'tickets',label:'Chamados SAC',icon:<Ticket className="w-4 h-4"/>,badge:openTicketsCount,module:'SAC',roles:['DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SAC','TECNICO','LOGISTICA','GERENTE_LOJA'] },
+    { id:'quality',label:'Qualidade & 5W2H',icon:<CheckSquare2 className="w-4 h-4"/>,module:'QUALITY',roles:['DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SAC'] },
+    { id:'risk',label:'Riscos, CAPA & Auditorias',icon:<ShieldAlert className="w-4 h-4"/>,module:'RISK',roles:['DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SAC','TECNICO'] },
+    { id:'technical',label:'Assistência Técnica (OS)',icon:<Wrench className="w-4 h-4"/>,module:'SAC',roles:['DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SAC','TECNICO'] },
+    { id:'logistics',label:'Logística & Coletas',icon:<Truck className="w-4 h-4"/>,module:'SAC',roles:['DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SAC','LOGISTICA'] },
+    { id:'knowledge',label:'Base de Conhecimento',icon:<BookOpen className="w-4 h-4"/>,module:'SAC',roles:['DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SAC','TECNICO','LOGISTICA','GERENTE_LOJA'] },
+    { id:'reports',label:'Relatórios Gerenciais',icon:<BarChart3 className="w-4 h-4"/>,module:'SAC',roles:['DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA'] },
+    { id:'traceability',label:'Rastreabilidade & Lotes',icon:<ScanSearch className="w-4 h-4"/>,module:'TRACEABILITY',roles:['DIRETORIA','RESPONSAVEL_TECNICA','ADMIN_EMPRESA','SAC','LOGISTICA'] },
+    { id:'regulatory',label:'Relatórios Anvisa & Inmetro',icon:<ClipboardCheck className="w-4 h-4"/>,module:'REGULATORY',roles:['RESPONSAVEL_TECNICA'] },
   ];
+  const opMenuItems = allOpMenuItems.filter(item=>contracted(item.module)&&roleAllows(item.roles));
 
   const adminMenuItems: { id: NavView; label: string; icon: React.ReactNode }[] = [
     { id: 'users', label: 'Editar Usuários & Perfis', icon: <Users className="w-4 h-4" /> },
