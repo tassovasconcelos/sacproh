@@ -1,5 +1,5 @@
 import { 
-  Ticket, Customer, Product, ProductLot, LotAction, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage, Tenant
+  Ticket, Customer, Product, ProductLot, LotAction, FactoryFollowup, QualityActionPlan, TechnicalCase, LogisticsCase, AuditLog, GeminiClassificationResult, DashboardFilters, TicketStatus, UserProfile, ServiceOrder, Carrier, TicketQualificationStage, Tenant
 } from '../types';
 import { 
   mockTickets, mockCustomers, mockProducts, mockQualityPlans, mockTechnicalCases, mockLogisticsCases, mockAuditLogs, mockUsers, mockServiceOrders 
@@ -67,6 +67,7 @@ const productFromDb = (row: any): Product => ({
 const productLotFromDb = (row:any):ProductLot => ({
   id:row.id, tenantId:row.tenant_id, productId:row.product_id, lotNumber:row.lot_number,
   manufacturingDate:row.manufacturing_date || undefined, expirationDate:row.expiration_date || undefined,
+  expirationMode:row.expiration_mode || (row.expiration_date ? 'DETERMINED' : 'NOT_INFORMED'),
   receivedQuantity:Number(row.received_quantity || 0), soldQuantity:Number(row.sold_quantity || 0),
   stockQuantity:Number(row.stock_quantity || 0), status:row.status,
   supplierDocument:row.supplier_document || undefined, notes:row.notes || undefined,
@@ -77,6 +78,17 @@ const lotActionFromDb=(row:any):LotAction=>({id:row.id,tenantId:row.tenant_id,pr
   actionType:row.action_type,status:row.status,reason:row.reason,ownerName:row.owner_name,
   dueDate:row.due_date||undefined,affectedCustomers:Number(row.affected_customers||0),affectedUnits:Number(row.affected_units||0),
   createdAt:row.created_at,completedAt:row.completed_at||undefined});
+
+const factoryFollowupFromDb=(row:any):FactoryFollowup=>({
+  id:row.id,tenantId:row.tenant_id,productLotId:row.product_lot_id,manufacturerName:row.manufacturer_name,
+  contactName:row.contact_name||undefined,contactEmail:row.contact_email||undefined,subject:row.subject,
+  problemSummary:row.problem_summary,requestedRepair:row.requested_repair||undefined,
+  requestedImprovement:row.requested_improvement||undefined,requestedParts:row.requested_parts||undefined,
+  replacementQuantity:Number(row.replacement_quantity||0),protocolReference:row.protocol_reference||undefined,
+  status:row.status,ownerName:row.owner_name,dueDate:row.due_date||undefined,lastContactAt:row.last_contact_at||undefined,
+  nextFollowupAt:row.next_followup_at||undefined,manufacturerResponse:row.manufacturer_response||undefined,
+  createdAt:row.created_at,updatedAt:row.updated_at
+});
 
 const ticketFromDb = (row: any): Ticket => ({
   id: row.id, tenantId: row.tenant_id, protocol: row.protocol, unitId: row.unit_id || undefined,
@@ -613,6 +625,7 @@ export const apiService = {
     const { data,error } = await supabase.from('product_lots').insert({
       tenant_id:lot.tenantId, product_id:lot.productId, lot_number:lot.lotNumber,
       manufacturing_date:lot.manufacturingDate || null, expiration_date:lot.expirationDate || null,
+      expiration_mode:lot.expirationMode,
       received_quantity:lot.receivedQuantity, sold_quantity:lot.soldQuantity, stock_quantity:lot.stockQuantity,
       status:lot.status, supplier_document:lot.supplierDocument || null, notes:lot.notes || null
     }).select().single();
@@ -639,6 +652,27 @@ export const apiService = {
       affected_customers:action.affectedCustomers,affected_units:action.affectedUnits}).select().single();
     if(error||!data)throw new Error(`Não foi possível registrar a ação: ${error?.message||''}`);
     return lotActionFromDb(data);
+  },
+
+  async getFactoryFollowups(tenantId:string):Promise<FactoryFollowup[]> {
+    if(!isSupabaseConfigured)return [];
+    const{data,error}=await supabase.from('factory_followups').select('*').eq('tenant_id',tenantId).order('updated_at',{ascending:false});
+    if(error)throw new Error(`Não foi possível carregar o follow-up da fábrica: ${error.message}`);
+    return(data||[]).map(factoryFollowupFromDb);
+  },
+
+  async createFactoryFollowup(item:Omit<FactoryFollowup,'id'|'createdAt'|'updatedAt'>):Promise<FactoryFollowup>{
+    const{data,error}=await supabase.from('factory_followups').insert({
+      tenant_id:item.tenantId,product_lot_id:item.productLotId,manufacturer_name:item.manufacturerName,
+      contact_name:item.contactName||null,contact_email:item.contactEmail||null,subject:item.subject,
+      problem_summary:item.problemSummary,requested_repair:item.requestedRepair||null,
+      requested_improvement:item.requestedImprovement||null,requested_parts:item.requestedParts||null,
+      replacement_quantity:item.replacementQuantity,protocol_reference:item.protocolReference||null,
+      status:item.status,owner_name:item.ownerName,due_date:item.dueDate||null,last_contact_at:item.lastContactAt||null,
+      next_followup_at:item.nextFollowupAt||null,manufacturer_response:item.manufacturerResponse||null
+    }).select().single();
+    if(error||!data)throw new Error(`Não foi possível registrar o follow-up da fábrica: ${error?.message||''}`);
+    return factoryFollowupFromDb(data);
   },
 
   async getCarriers(): Promise<Carrier[]> {

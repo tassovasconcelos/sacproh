@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, Download, Factory, PackageSearch, ShieldAlert, Store, Truck } from 'lucide-react';
 import { Product, Ticket, UserRole } from '../../types';
@@ -61,6 +62,23 @@ export const TraceabilityIntelligence: React.FC<Props> = ({ tickets, products, t
     nearExpiry:rows.filter(row=>row.expiryDays !== null && row.expiryDays <= 90).length
   }), [rows]);
 
+  const recurrence = useMemo(() => {
+    const defects=new Map<string,{count:number;products:Set<string>;lots:Set<string>;customers:Set<string>}>();
+    const customers=new Map<string,{name:string;count:number;products:Set<string>;lots:Set<string>}>();
+    tickets.forEach(ticket=>{
+      const defect=(ticket.subcategory||ticket.category||'Não classificado').trim();
+      const defectRow=defects.get(defect)||{count:0,products:new Set<string>(),lots:new Set<string>(),customers:new Set<string>()};
+      defectRow.count+=1;defectRow.customers.add(ticket.customerId||ticket.customerName);
+      ticket.items.forEach(item=>{defectRow.products.add(item.productName);if(item.lotNumber)defectRow.lots.add(item.lotNumber);});defects.set(defect,defectRow);
+      const customerKey=ticket.customerId||ticket.customerName;const customerRow=customers.get(customerKey)||{name:ticket.customerName,count:0,products:new Set<string>(),lots:new Set<string>()};
+      customerRow.count+=1;ticket.items.forEach(item=>{customerRow.products.add(item.productName);if(item.lotNumber)customerRow.lots.add(item.lotNumber);});customers.set(customerKey,customerRow);
+    });
+    return {
+      defects:[...defects.entries()].map(([name,item])=>({name,...item})).filter(item=>item.count>=2).sort((a,b)=>b.count-a.count).slice(0,10),
+      customers:[...customers.values()].filter(item=>item.count>=2).sort((a,b)=>b.count-a.count).slice(0,10)
+    };
+  },[tickets]);
+
   const download = () => {
     const header=['Risco','Pontuação','Produto','SKU','Lote','Validade','SACs','Em aberto','Clientes','Fabricante','Importador','Distribuidor','Lojista'];
     const body=visible.map(row=>[row.level,row.score,row.product,row.sku,row.lot,row.expiration || '',row.ticketCount,row.open,row.customerCount,row.manufacturer,row.importer,row.distributor,row.retailer]);
@@ -95,7 +113,10 @@ export const TraceabilityIntelligence: React.FC<Props> = ({ tickets, products, t
 
     <div className="overflow-hidden rounded-xl border bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-xs"><thead className="bg-slate-50 text-slate-500"><tr>{['Risco','Produto / lote','Ocorrências','Validade','Fabricante','Importador','Distribuidor','Lojista','Último SAC'].map(label=><th key={label} className="p-3 text-left font-black uppercase">{label}</th>)}</tr></thead><tbody>{visible.map(row=><tr key={row.key} className="border-t hover:bg-slate-50"><td className="p-3"><span className={`rounded-full px-2 py-1 font-black ${row.level==='CRÍTICO'?'bg-red-100 text-red-700':row.level==='ATENÇÃO'?'bg-amber-100 text-amber-700':'bg-blue-100 text-blue-700'}`}>{row.level} · {row.score}</span></td><td className="p-3"><strong className="text-slate-900">{row.product}</strong><br/><span className="font-mono text-slate-500">{row.sku} · {row.lot}</span></td><td className="p-3"><strong>{row.ticketCount} SAC(s)</strong><br/><span className="text-slate-500">{row.open} aberto(s) · {row.customerCount} cliente(s)</span></td><td className="p-3">{row.expiration ? new Date(`${row.expiration}T12:00:00`).toLocaleDateString('pt-BR') : 'Não informada'}{row.expiryDays !== null && <><br/><span className={row.expiryDays<=90?'font-bold text-red-700':'text-slate-500'}>{row.expiryDays < 0 ? `${Math.abs(row.expiryDays)} dias vencido` : `${row.expiryDays} dias`}</span></>}</td><td className="p-3"><Factory className="mr-1 inline h-3 w-3"/>{row.manufacturer}</td><td className="p-3">{row.importer}</td><td className="p-3"><Truck className="mr-1 inline h-3 w-3"/>{row.distributor}</td><td className="p-3">{row.retailer}</td><td className="p-3 whitespace-nowrap">{new Date(row.lastOccurrence).toLocaleDateString('pt-BR')}</td></tr>)}</tbody></table></div>{visible.length===0&&<p className="p-8 text-center text-sm text-slate-500">Nenhum registro corresponde aos filtros.</p>}</div>
 
+    <div className="grid gap-4 lg:grid-cols-2"><section className="rounded-xl border bg-white p-5 shadow-sm"><h2 className="font-black text-[#10233F]">Defeitos recorrentes</h2><p className="mb-4 text-xs text-slate-500">Classificações com dois ou mais SACs para investigação, CAPA e reporte à fábrica.</p><div className="space-y-2">{recurrence.defects.map(item=><div key={item.name} className="grid grid-cols-[1fr_auto] gap-3 rounded-lg bg-slate-50 p-3 text-xs"><div><strong>{item.name}</strong><p className="text-slate-500">{item.products.size} produto(s) · {item.lots.size} lote(s) · {item.customers.size} cliente(s)</p></div><span className="text-lg font-black text-red-700">{item.count}</span></div>)}{recurrence.defects.length===0&&<p className="text-xs text-slate-500">Nenhum defeito recorrente no período.</p>}</div></section><section className="rounded-xl border bg-white p-5 shadow-sm"><h2 className="font-black text-[#10233F]">Clientes recorrentes</h2><p className="mb-4 text-xs text-slate-500">Clientes com dois ou mais atendimentos para acompanhamento de satisfação e solução definitiva.</p><div className="space-y-2">{recurrence.customers.map(item=><div key={item.name} className="grid grid-cols-[1fr_auto] gap-3 rounded-lg bg-slate-50 p-3 text-xs"><div><strong>{item.name}</strong><p className="text-slate-500">{item.products.size} produto(s) · {item.lots.size} lote(s)</p></div><span className="text-lg font-black text-amber-700">{item.count}</span></div>)}{recurrence.customers.length===0&&<p className="text-xs text-slate-500">Nenhum cliente recorrente no período.</p>}</div></section></div>
+
     <div className="grid gap-3 md:grid-cols-3">{chainCards.map(card=><div key={card.title} className="rounded-xl border bg-white p-4"><card.icon className="h-5 w-5 text-[#145EDB]"/><h3 className="mt-2 font-black">{card.title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{card.text}</p></div>)}</div>
     <LotControl tenantId={tenantId} products={products} tickets={tickets} userRole={userRole}/>
   </div>;
 };
+
