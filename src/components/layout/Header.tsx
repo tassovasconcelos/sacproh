@@ -22,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange
 }) => {
   const rolesList = [
-    { code: 'SUPERADMIN', label: 'Superadmin GRIT' },
+    { code: 'SUPERADMIN', label: 'Superadministrador Procirúrgica' },
     { code: 'DIRETORIA', label: 'Diretoria Executiva' },
     { code: 'RESPONSAVEL_TECNICA', label: 'Resp. Técnica / Farmacêutica' },
     { code: 'TECNICO', label: 'Técnico Especializado' },
@@ -38,9 +38,9 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-3">
           <img
-            src="/grit-logo.png"
-            alt="GRIT Soluções e Negócios"
-            className="h-10 w-44 object-cover object-center"
+            src="/procirurgica-logo.png"
+            alt="Procirúrgica"
+            className="h-10 w-auto object-contain"
           />
           <div className="hidden sm:block border-l border-slate-600 pl-3">
             <div className="flex items-center space-x-2">
@@ -116,3 +116,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+
