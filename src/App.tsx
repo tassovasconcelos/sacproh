@@ -100,6 +100,7 @@ export default function App() {
   const [currentTenant, setCurrentTenant] = useState<Tenant>(mockTenants[0]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [enabledModules, setEnabledModules] = useState<string[]>(['SAC']);
 
   // Data Store
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -128,6 +129,8 @@ export default function App() {
     setTickets(fetchedTickets); setUsers(fetchedUsers); setCustomers(fetchedCustomers);
     setProducts(fetchedProducts); setCarriers(fetchedCarriers); setQualityPlans(qPlans);
     setTechnicalCases(tCases); setLogisticsCases(lCases); setServiceOrders(sOrders); setAuditLogs(logs);
+    const { data: moduleRows } = await supabase.from('tenant_modules').select('module_code,enabled').eq('tenant_id', effectiveTenantId);
+    setEnabledModules(['SAC', ...((moduleRows || []).filter(row => row.enabled).map(row => row.module_code as string))]);
   };
 
   useEffect(() => {
@@ -373,6 +376,7 @@ export default function App() {
           }}
           onGoToPortal={() => navigateToPortal()}
           currentUserRole={currentUser.roleCode}
+          enabledModules={enabledModules}
         />
 
         {/* View Workspace Content Area */}
@@ -395,7 +399,7 @@ export default function App() {
           ) : (
             <>
               {currentView === 'dashboard' && (
-                <ExecutiveDashboard tickets={tickets} tenant={currentTenant} />
+                <ExecutiveDashboard tickets={tickets} tenant={currentTenant} currentUser={currentUser} />
               )}
 
               {currentView === 'tickets' && (
@@ -439,7 +443,7 @@ export default function App() {
               )}
 
               {currentView === 'reports' && (
-                <ExecutiveDashboard tickets={tickets} tenant={currentTenant} />
+                <ExecutiveDashboard tickets={tickets} tenant={currentTenant} currentUser={currentUser} />
               )}
 
               {currentView === 'traceability' && (
@@ -521,3 +525,4 @@ export default function App() {
     </div></Suspense>
   );
 }
+
