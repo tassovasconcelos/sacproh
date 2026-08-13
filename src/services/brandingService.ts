@@ -1,3 +1,4 @@
+
 import { supabase } from '../lib/supabase';
 
 export type TenantBranding={tenantId:string;logoPath?:string;logoUrl?:string;primaryColor:string;secondaryColor:string;accentColor:string;textColor:string;documentFooter?:string;showPoweredBy:boolean};
