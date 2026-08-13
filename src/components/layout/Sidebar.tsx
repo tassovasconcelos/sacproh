@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   LayoutDashboard, Ticket, CheckSquare2, Wrench, Truck, UploadCloud, 
@@ -168,10 +169,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer Info */}
       <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 text-center">
-        <p className="text-[11px] font-bold text-white">GRIT SAC 4.0 Platform</p>
-        <p className="text-[10px] text-slate-400 mt-0.5">gritnews.com.br</p>
+        <p className="text-[11px] font-bold text-white">SACPROH · Procirúrgica</p>
+        <p className="text-[10px] text-slate-400 mt-0.5">Gestão integrada de atendimento</p>
       </div>
     </aside>
   );
 };
+
 
