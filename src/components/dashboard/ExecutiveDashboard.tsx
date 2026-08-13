@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 import { TrendingUp, Clock, AlertTriangle, CheckCircle2, Filter, Printer, RefreshCw } from 'lucide-react';
-import { Tenant, Ticket } from '../../types';
+import { Tenant, Ticket, UserProfile } from '../../types';
 import { BrandedDocumentFooter, BrandedDocumentHeader } from '../documents/BrandedDocumentHeader';
 import { brandingService, defaultBranding } from '../../services/brandingService';
 
-interface ExecutiveDashboardProps { tickets: Ticket[]; tenant: Tenant; }
+interface ExecutiveDashboardProps { tickets: Ticket[]; tenant: Tenant; currentUser?: UserProfile | null; }
 
 const CLOSED = new Set(['CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT']);
 const STATUS_LABELS: Record<string,string> = {
@@ -13,7 +13,7 @@ const STATUS_LABELS: Record<string,string> = {
   SENT_TO_LOGISTICS:'Logística', WAITING_CUSTOMER:'Aguardando cliente', WAITING_SUPPLIER:'Aguardando fornecedor',
   CLOSED_PROCEDENT:'Encerrado procedente', CLOSED_NON_PROCEDENT:'Encerrado não procedente'
 };
-export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets, tenant }) => {
+export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets, tenant, currentUser }) => {
   const [period, setPeriod] = useState<'30'|'90'|'365'|'ALL'>('ALL');
   const [status, setStatus] = useState('ALL');
   const [priority, setPriority] = useState('ALL');
@@ -62,6 +62,16 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets,
   const responsibleData = useMemo(() => (Object.entries(filtered.reduce<Record<string,number>>((acc,t)=>{const key=t.assignedToName||t.assignedArea||'Sem responsável';acc[key]=(acc[key]||0)+1;return acc;},{})) as Array<[string,number]>)
     .sort((a,b)=>b[1]-a[1]).slice(0,8),[filtered]);
 
+  const executiveIndicators = useMemo(() => {
+    const open = filtered.filter(ticket => !CLOSED.has(ticket.status) && ticket.status !== 'CANCELLED');
+    const items = filtered.flatMap(ticket => ticket.items || []);
+    const traceableItems = items.filter(item => Boolean(item.lotNumber?.trim() || item.serialNumber?.trim())).length;
+    const missingTraceability = filtered.filter(ticket => (ticket.items || []).some(item => !item.lotNumber?.trim() && !item.serialNumber?.trim()));
+    const aging30 = open.filter(ticket => Date.now() - new Date(ticket.createdAt).getTime() > 30 * 86400000).length;
+    const customers = filtered.reduce<Record<string,number>>((acc,ticket) => { acc[ticket.customerName] = (acc[ticket.customerName] || 0) + 1; return acc; },{});
+    return { resolutionRate:filtered.length?(metrics.closed/filtered.length)*100:0, traceabilityRate:items.length?(traceableItems/items.length)*100:100, missingTraceability, aging30, recurringCustomers:(Object.values(customers) as number[]).filter(count=>count>1).length, riskOpen:open.filter(ticket=>ticket.userRiskFlag||ticket.adverseEventFlag||ticket.damageFlag).length, estimatedHoursSaved:Math.round(metrics.closed*.75) };
+  }, [filtered, metrics.closed]);
+
   const regulatoryAlerts = useMemo(() => filtered
     .filter(ticket => !CLOSED.has(ticket.status) && ticket.status !== 'CANCELLED')
     .map(ticket => {
@@ -95,6 +105,13 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets,
       ].map(([label,value,color,icon])=><div key={String(label)} className="bg-white p-4 rounded-xl border shadow-sm"><div className="flex justify-between text-slate-500"><span className="text-[10px] font-bold uppercase">{label}</span><span className="w-4 h-4">{icon as React.ReactNode}</span></div><p className={`text-2xl font-black ${color}`}>{value}</p></div>)}
     </div>
 
+    <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0B2343] to-[#145EDB] p-5 text-white shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.2em] text-blue-200">Sala de situação da diretoria</p><h2 className="mt-1 text-xl font-black">Resultado, controle e exposição operacional</h2><p className="mt-1 text-xs text-blue-100">Leitura executiva da eficiência do SAC, rastreabilidade e risco regulatório.</p></div><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">{currentUser?.roleCode || 'DIRETORIA'}</span></div>
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-6">{[['Taxa de resolução',`${executiveIndicators.resolutionRate.toFixed(1)}%`],['Rastreabilidade',`${executiveIndicators.traceabilityRate.toFixed(1)}%`],['Backlog +30 dias',executiveIndicators.aging30],['Riscos em aberto',executiveIndicators.riskOpen],['Clientes recorrentes',executiveIndicators.recurringCustomers],['Horas operacionais poupadas*',executiveIndicators.estimatedHoursSaved]].map(([label,value])=><article key={String(label)} className="rounded-xl border border-white/10 bg-white/10 p-3"><strong className="text-2xl font-black">{value}</strong><p className="mt-1 text-[10px] font-bold uppercase text-blue-100">{label}</p></article>)}</div>
+      <p className="mt-3 text-[10px] text-blue-200">*Estimativa configurável baseada em 45 minutos evitados por ocorrência encerrada; não representa economia contábil auditada.</p>
+    </section>
+    <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-black text-amber-950">Qualidade cadastral para ANVISA e Inmetro</h3><p className="text-xs text-amber-800">Todo item deve possuir lote ou número de série. A RT e o Superadmin devem tratar as pendências antes da conclusão regulatória.</p></div><span className={`rounded-full px-3 py-1 text-xs font-black ${executiveIndicators.missingTraceability.length?'bg-red-100 text-red-700':'bg-emerald-100 text-emerald-700'}`}>{executiveIndicators.missingTraceability.length} SAC(s) incompleto(s)</span></div>{executiveIndicators.missingTraceability.length>0&&<div className="mt-4 overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left text-amber-900"><th className="p-2">Protocolo</th><th className="p-2">Cliente</th><th className="p-2">Produto sem rastreabilidade</th><th className="p-2">Responsável</th></tr></thead><tbody>{executiveIndicators.missingTraceability.slice(0,12).map(ticket=><tr key={ticket.id} className="border-t border-amber-200"><td className="p-2 font-mono font-black">{ticket.protocol}</td><td className="p-2">{ticket.customerName}</td><td className="p-2">{ticket.items.filter(item=>!item.lotNumber?.trim()&&!item.serialNumber?.trim()).map(item=>item.productName).join(', ')}</td><td className="p-2">{ticket.assignedToName||ticket.assignedArea||'RT a definir'}</td></tr>)}</tbody></table></div>}</section>
+
     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
         <div><h3 className="font-bold text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-[#D92D20]"/>Central de alertas da Responsável Técnica</h3>
@@ -122,3 +139,4 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets,
     <BrandedDocumentFooter tenantId={tenant.id}/>
   </div>;
 };
+
