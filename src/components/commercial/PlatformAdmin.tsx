@@ -1,3 +1,4 @@
+
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, BarChart3, Building2, CreditCard, KeyRound, LoaderCircle, LogIn, Pencil, RefreshCw, ShieldAlert, ShieldCheck, TestTube2, Users } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
