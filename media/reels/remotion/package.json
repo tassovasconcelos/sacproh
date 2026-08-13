@@ -1,0 +1,22 @@
+{
+  "name": "grit-sac40-reels",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio --no-open",
+    "render:fluxo": "remotion render src/index.ts ReelFluxo out/reel-01-fluxo-sac40.mp4",
+    "render:rastreabilidade": "remotion render src/index.ts ReelRastreabilidade out/reel-02-rastreabilidade.mp4",
+    "render:gestao": "remotion render src/index.ts ReelGestao out/reel-03-gestao.mp4",
+    "render:institucional": "remotion render src/index.ts ReelInstitucionalGrit out/reel-04-institucional-grit.mp4",
+    "render:processos": "remotion render src/index.ts ReelProcessosInteligentes out/reel-05-processos-inteligentes.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.506",
+    "@remotion/transitions": "4.0.506",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "remotion": "4.0.506"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2"
+  }
+}

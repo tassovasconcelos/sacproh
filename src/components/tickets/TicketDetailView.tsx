@@ -286,6 +286,9 @@ export const TicketDetailView: React.FC<TicketDetailViewProps> = ({
                     <div className="font-mono text-[11px] text-slate-600">
                       <p>Nº Série: <strong>{it.serialNumber || 'N/A'}</strong></p>
                       <p>Lote: <strong>{it.lotNumber || 'N/A'}</strong></p>
+                      <p>Validade: <strong>{it.expirationDate ? new Date(`${it.expirationDate}T12:00:00`).toLocaleDateString('pt-BR') : 'N/A'}</strong></p>
+                      <p>Fabricante: <strong>{it.manufacturerName || 'N/A'}</strong></p>
+                      <p>Importador / Distribuidor: <strong>{[it.importerName,it.distributorName].filter(Boolean).join(' / ') || 'N/A'}</strong></p>
                     </div>
                   </div>
                 ))}
