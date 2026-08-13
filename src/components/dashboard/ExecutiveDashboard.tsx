@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
-import { TrendingUp, Clock, AlertTriangle, CheckCircle2, Filter, Printer, RefreshCw, Download } from 'lucide-react';
-import { Ticket } from '../../types';
+import { TrendingUp, Clock, AlertTriangle, CheckCircle2, Filter, Printer, RefreshCw } from 'lucide-react';
+import { Tenant, Ticket } from '../../types';
+import { BrandedDocumentFooter, BrandedDocumentHeader } from '../documents/BrandedDocumentHeader';
+import { brandingService, defaultBranding } from '../../services/brandingService';
 
-interface ExecutiveDashboardProps { tickets: Ticket[]; }
+interface ExecutiveDashboardProps { tickets: Ticket[]; tenant: Tenant; }
 
 const CLOSED = new Set(['CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT']);
 const STATUS_LABELS: Record<string,string> = {
@@ -11,12 +13,12 @@ const STATUS_LABELS: Record<string,string> = {
   SENT_TO_LOGISTICS:'Logística', WAITING_CUSTOMER:'Aguardando cliente', WAITING_SUPPLIER:'Aguardando fornecedor',
   CLOSED_PROCEDENT:'Encerrado procedente', CLOSED_NON_PROCEDENT:'Encerrado não procedente'
 };
-const COLORS = ['#145EDB','#FF8500','#22A06B','#D92D20','#7C3AED','#0891B2','#64748B'];
-
-export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets }) => {
+export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets, tenant }) => {
   const [period, setPeriod] = useState<'30'|'90'|'365'|'ALL'>('ALL');
   const [status, setStatus] = useState('ALL');
   const [priority, setPriority] = useState('ALL');
+  const [branding,setBranding]=useState({...defaultBranding,tenantId:tenant.id});
+  useEffect(()=>{brandingService.get(tenant.id).then(setBranding).catch(()=>undefined);},[tenant.id]);
 
   const filtered = useMemo(() => {
     const limit = period === 'ALL' ? null : Date.now() - Number(period) * 86400000;
@@ -38,7 +40,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
 
   const categoryData = useMemo(() => (Object.entries(filtered.reduce<Record<string,number>>((acc,t) => {
     const key=t.category || 'Não classificado'; acc[key]=(acc[key]||0)+1; return acc;
-  },{})) as Array<[string,number]>).sort((a,b)=>b[1]-a[1]).map(([name,value],index)=>({name,value,color:COLORS[index%COLORS.length]})),[filtered]);
+  },{})) as Array<[string,number]>).sort((a,b)=>b[1]-a[1]).map(([name,value],index)=>{const colors=[branding.primaryColor,branding.accentColor,branding.secondaryColor,'#22A06B','#D92D20','#7C3AED','#64748B'];return{name,value,color:colors[index%colors.length]};}),[filtered,branding]);
 
   const paretoData = useMemo(() => {
     const total=Math.max(filtered.length,1); let accumulated=0;
@@ -60,33 +62,6 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
   const responsibleData = useMemo(() => (Object.entries(filtered.reduce<Record<string,number>>((acc,t)=>{const key=t.assignedToName||t.assignedArea||'Sem responsável';acc[key]=(acc[key]||0)+1;return acc;},{})) as Array<[string,number]>)
     .sort((a,b)=>b[1]-a[1]).slice(0,8),[filtered]);
 
-  const productLotData = useMemo(() => {
-    const groups = new Map<string,{product:string;model:string;sku:string;lot:string;tickets:Set<string>;quantity:number;open:number;critical:number}>();
-    filtered.forEach(ticket => ticket.items.forEach(item => {
-      const product=item.productName || 'Produto não informado';
-      const model=item.productModel || 'Modelo não informado';
-      const sku=item.sku || 'N/A';
-      const lot=item.lotNumber || 'SEM_LOTE_HISTORICO';
-      const key=[product,model,sku,lot].join('|');
-      const group=groups.get(key)||{product,model,sku,lot,tickets:new Set<string>(),quantity:0,open:0,critical:0};
-      if(!group.tickets.has(ticket.id)){
-        group.tickets.add(ticket.id);
-        if(!CLOSED.has(ticket.status)) group.open++;
-        if(ticket.priority==='CRITICAL'||ticket.userRiskFlag||ticket.adverseEventFlag) group.critical++;
-      }
-      group.quantity+=Math.max(item.quantity||1,1);
-      groups.set(key,group);
-    }));
-    return [...groups.values()].map(group=>({...group,sacs:group.tickets.size})).sort((a,b)=>b.sacs-a.sacs||a.product.localeCompare(b.product));
-  },[filtered]);
-
-  const exportProductLotCsv = () => {
-    const rows=[['Produto','Modelo','SKU','Lote','Quantidade reclamada','SACs','SACs abertos','Casos críticos'],...productLotData.map(row=>[row.product,row.model,row.sku,row.lot,row.quantity,row.sacs,row.open,row.critical])];
-    const csv='\uFEFF'+rows.map(row=>row.map(value=>`"${String(value).replace(/"/g,'""')}"`).join(';')).join('\r\n');
-    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-    const link=document.createElement('a');link.href=url;link.download=`sac-produtos-lotes-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);
-  };
-
   const regulatoryAlerts = useMemo(() => filtered
     .filter(ticket => !CLOSED.has(ticket.status) && ticket.status !== 'CANCELLED')
     .map(ticket => {
@@ -101,6 +76,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
     .sort((a,b) => a.legalDueAt - b.legalDueAt), [filtered]);
 
   return <div className="space-y-5 print:space-y-3">
+    <BrandedDocumentHeader tenant={tenant} title="Relatório Gerencial do SAC" reference={`Emitido em ${new Date().toLocaleString('pt-BR')}`}/>
     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
       <div className="flex flex-col md:flex-row justify-between gap-3"><div><h1 className="text-xl font-bold text-[#10233F]">Relatório Gerencial do SAC</h1>
         <p className="text-xs text-slate-500">Dados reais dos chamados registrados no Supabase · Atualizado em {new Date().toLocaleString('pt-BR')}</p></div>
@@ -133,7 +109,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div className="lg:col-span-2 bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Pareto real por categoria</h3><p className="text-xs text-slate-500 mb-3">Volume e percentual acumulado dos SACs</p><div className="h-64"><ResponsiveContainer><BarChart data={paretoData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="cause" tick={{fontSize:9}}/><YAxis yAxisId="left"/><YAxis yAxisId="right" orientation="right" domain={[0,100]}/><Tooltip/><Bar yAxisId="left" dataKey="count" fill="#145EDB" name="SACs"/><Line yAxisId="right" dataKey="percentage" stroke="#FF8500" name="% acumulado"/></BarChart></ResponsiveContainer></div></div>
+      <div className="lg:col-span-2 bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Pareto real por categoria</h3><p className="text-xs text-slate-500 mb-3">Volume e percentual acumulado dos SACs</p><div className="h-64"><ResponsiveContainer><BarChart data={paretoData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="cause" tick={{fontSize:9}}/><YAxis yAxisId="left"/><YAxis yAxisId="right" orientation="right" domain={[0,100]}/><Tooltip/><Bar yAxisId="left" dataKey="count" fill={branding.primaryColor} name="SACs"/><Line yAxisId="right" dataKey="percentage" stroke={branding.accentColor} name="% acumulado"/></BarChart></ResponsiveContainer></div></div>
       <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Distribuição por categoria</h3><div className="h-64"><ResponsiveContainer><PieChart><Pie data={categoryData} dataKey="value" nameKey="name" outerRadius={80}>{categoryData.map((x,i)=><Cell key={i} fill={x.color}/>)}</Pie><Tooltip/><Legend wrapperStyle={{fontSize:10}}/></PieChart></ResponsiveContainer></div></div>
     </div>
 
@@ -143,12 +119,6 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets 
     </div>
 
     <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm mb-3">Carga por responsável ou área</h3><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="bg-slate-50"><th className="p-2 text-left">Responsável / área</th><th className="p-2 text-right">Chamados</th><th className="p-2 text-right">Participação</th></tr></thead><tbody>{responsibleData.map(([name,count])=><tr key={name} className="border-t"><td className="p-2">{name}</td><td className="p-2 text-right font-bold">{count}</td><td className="p-2 text-right">{metrics.total?((count/metrics.total)*100).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></div><p className="text-xs text-slate-500 mt-3">Tempo médio de resolução: <strong>{metrics.averageDays===null?'Sem encerramentos':`${metrics.averageDays.toFixed(1)} dias`}</strong></p></div>
-    <div className="bg-white p-5 rounded-xl border shadow-sm space-y-3">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <div><h3 className="font-bold text-sm">Análise de reclamações por produto, modelo e lote</h3><p className="text-xs text-slate-500">Base rastreável para análise e comunicação com a fábrica.</p></div>
-        <button type="button" onClick={exportProductLotCsv} disabled={!productLotData.length} className="px-3 py-2 bg-[#145EDB] text-white rounded-lg text-xs font-bold flex items-center gap-1 disabled:opacity-50"><Download className="w-3.5 h-3.5"/>Exportar CSV para fábrica</button>
-      </div>
-      {productLotData.length===0?<p className="p-6 text-center bg-slate-50 rounded-lg text-xs text-slate-500">Nenhum produto encontrado no período selecionado.</p>:<div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="bg-slate-50"><th className="p-2 text-left">Produto / modelo</th><th className="p-2 text-left">SKU</th><th className="p-2 text-left">Lote</th><th className="p-2 text-right">Qtd. reclamada</th><th className="p-2 text-right">SACs</th><th className="p-2 text-right">Abertos</th><th className="p-2 text-right">Críticos</th></tr></thead><tbody>{productLotData.map(row=><tr key={`${row.sku}-${row.lot}`} className="border-t"><td className="p-2"><strong>{row.product}</strong><br/><span className="text-slate-500">{row.model}</span></td><td className="p-2 font-mono">{row.sku}</td><td className="p-2 font-mono font-bold">{row.lot}</td><td className="p-2 text-right">{row.quantity}</td><td className="p-2 text-right font-bold text-[#145EDB]">{row.sacs}</td><td className="p-2 text-right">{row.open}</td><td className="p-2 text-right text-red-700 font-bold">{row.critical}</td></tr>)}</tbody></table></div>}
-    </div>
+    <BrandedDocumentFooter tenantId={tenant.id}/>
   </div>;
 };

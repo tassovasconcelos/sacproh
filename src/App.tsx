@@ -5,8 +5,8 @@ import { TicketList } from './components/tickets/TicketList';
 import { NewTicketModal } from './components/tickets/NewTicketModal';
 import { TicketDetailView } from './components/tickets/TicketDetailView';
 const ExecutiveDashboard = lazy(() => import('./components/dashboard/ExecutiveDashboard').then(module => ({ default: module.ExecutiveDashboard })));
+const TraceabilityIntelligence = lazy(() => import('./components/intelligence/TraceabilityIntelligence').then(module => ({ default: module.TraceabilityIntelligence })));
 const QualityModule = lazy(() => import('./components/quality/QualityModule').then(module => ({ default: module.QualityModule })));
-const RiskManagement = lazy(() => import('./components/risk/RiskManagement').then(module => ({ default: module.RiskManagement })));
 const TechnicalModule = lazy(() => import('./components/technical/TechnicalModule').then(module => ({ default: module.TechnicalModule })));
 const LogisticsModule = lazy(() => import('./components/logistics/LogisticsModule').then(module => ({ default: module.LogisticsModule })));
 const SpreadsheetImporter = lazy(() => import('./components/import/SpreadsheetImporter').then(module => ({ default: module.SpreadsheetImporter })));
@@ -14,6 +14,15 @@ const KnowledgeBase = lazy(() => import('./components/knowledge/KnowledgeBase').
 const SettingsModule = lazy(() => import('./components/settings/SettingsModule').then(module => ({ default: module.SettingsModule })));
 const GritNewsPortal = lazy(() => import('./components/grit/GritNewsPortal').then(module => ({ default: module.GritNewsPortal })));
 const AdminLoginModal = lazy(() => import('./components/auth/AdminLoginModal').then(module => ({ default: module.AdminLoginModal })));
+const SaasTrialPortal = lazy(() => import('./components/commercial/SaasTrialPortal').then(module => ({ default: module.SaasTrialPortal })));
+const CommercialTrialAdmin = lazy(() => import('./components/commercial/CommercialTrialAdmin').then(module => ({ default: module.CommercialTrialAdmin })));
+const CommercialOrderAdmin = lazy(() => import('./components/commercial/CommercialOrderAdmin').then(module => ({ default: module.CommercialOrderAdmin })));
+const CommercialAlertsAdmin = lazy(() => import('./components/commercial/CommercialAlertsAdmin').then(module => ({ default: module.CommercialAlertsAdmin })));
+const CommercialCustomersAdmin = lazy(() => import('./components/commercial/CommercialCustomersAdmin').then(module => ({ default: module.CommercialCustomersAdmin })));
+const MarketingAnalyticsAdmin = lazy(() => import('./components/commercial/MarketingAnalyticsAdmin').then(module => ({ default: module.MarketingAnalyticsAdmin })));
+const PlatformAdmin = lazy(() => import('./components/commercial/PlatformAdmin').then(module => ({ default: module.PlatformAdmin })));
+const RegulatoryReports = lazy(() => import('./components/regulatory/RegulatoryReports').then(module => ({ default: module.RegulatoryReports })));
+const RiskManagement = lazy(() => import('./components/risk/RiskManagement').then(module => ({ default: module.RiskManagement })));
 
 const ModuleLoading = () => <div className="min-h-[240px] flex items-center justify-center text-sm font-semibold text-slate-500">Carregando módulo...</div>;
 
@@ -23,8 +32,17 @@ import {
 import { mockTenants, mockCustomers, mockProducts } from './lib/mockData';
 import { apiService } from './services/apiService';
 import { supabase } from './lib/supabase';
+import { usageAnalytics } from './services/usageAnalytics';
 
 export default function App() {
+  const isSaasTrialHost = typeof window !== 'undefined' &&
+    window.location.hostname.toLowerCase() === 'apps.sactrial.gritnews.com.br';
+  const isCommercialTrialAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-trials');
+  const isCommercialOrderAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-orders');
+  const isCommercialAlertsAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-alerts');
+  const isCommercialCustomersAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('commercial-customers');
+  const isMarketingAnalyticsAdmin = typeof window !== 'undefined' && window.location.pathname.toLowerCase().includes('marketing-analytics');
+  const isPlatformAdmin = typeof window !== 'undefined' && /^\/admin\/?$/.test(window.location.pathname.toLowerCase());
   const isDedicatedSacHost = typeof window !== 'undefined' &&
     window.location.hostname.toLowerCase() === 'apps.sacproh.gritnews.com.br';
 
@@ -78,7 +96,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Multi-Tenant & User Role State
-  const [tenants] = useState<Tenant[]>(mockTenants);
+  const [tenants, setTenants] = useState<Tenant[]>(mockTenants);
   const [currentTenant, setCurrentTenant] = useState<Tenant>(mockTenants[0]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -118,14 +136,21 @@ export default function App() {
   }, [currentUser?.id, currentUser?.tenantId]);
 
   useEffect(() => {
+    if (!currentUser?.id || !currentUser.tenantId || appMode !== 'app') return;
+    usageAnalytics.track(currentUser.tenantId, currentUser.id, currentView, 'AREA_VIEW');
+  }, [currentUser?.id, currentUser?.tenantId, currentView, appMode]);
+
+  useEffect(() => {
     const restoreSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (!data.session?.user) return;
       const profile = await apiService.getCurrentProfile(data.session.user.id);
       if (profile) {
-        setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
+        const tenant=await apiService.getTenant(profile.tenantId);
+        if(tenant){setCurrentTenant(tenant);setTenants([tenant]);}else setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
         setCurrentUser(profile);
         setIsAdminAuthenticated(['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode));
+        usageAnalytics.track(profile.tenantId, profile.id, 'session', 'SESSION_START');
       }
     };
     restoreSession();
@@ -136,6 +161,7 @@ export default function App() {
     setTickets(prev => [newTicket, ...prev]);
     setIsNewTicketModalOpen(false);
     setSelectedTicket(newTicket);
+    if (currentUser) usageAnalytics.track(currentUser.tenantId, currentUser.id, 'tickets', 'RECORD_CREATED', 'ticket', newTicket.id);
   };
 
   // Ticket Status Updated Handler
@@ -143,6 +169,7 @@ export default function App() {
     if (!currentUser) return;
     const updated = await apiService.updateTicketStatus(ticketId, newStatus, notes, currentUser.id);
     if (updated) {
+      usageAnalytics.track(currentUser.tenantId, currentUser.id, 'tickets', 'RECORD_UPDATED', 'ticket', ticketId);
       setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus } : t));
       if (selectedTicket?.id === ticketId) {
         setSelectedTicket(prev => prev ? { ...prev, status: newStatus } : null);
@@ -174,6 +201,7 @@ export default function App() {
     setServiceOrders(prev => [newOS, ...prev]);
     const tCases = await apiService.getTechnicalCases();
     setTechnicalCases(tCases);
+    if (currentUser) usageAnalytics.track(currentUser.tenantId, currentUser.id, 'technical', 'RECORD_CREATED', 'service_order', newOS.id);
   };
 
   const handleUpdateTicket = async (ticket: Ticket, changes: Partial<Ticket>) => {
@@ -181,6 +209,7 @@ export default function App() {
     const updated = await apiService.updateTicket(ticket, changes, currentUser);
     setTickets(previous => previous.map(item => item.id === updated.id ? updated : item));
     setSelectedTicket(updated);
+    usageAnalytics.track(currentUser.tenantId, currentUser.id, 'tickets', 'RECORD_UPDATED', 'ticket', ticket.id);
   };
 
   const handleDeleteTicket = async (ticket: Ticket, reason: string) => {
@@ -203,6 +232,7 @@ export default function App() {
   const handleCreateUser = async (userData: Omit<UserProfile, 'id'>) => {
     const created = await apiService.createUser(userData);
     setUsers(prev => [created, ...prev]);
+    if (currentUser) usageAnalytics.track(currentUser.tenantId, currentUser.id, 'users', 'RECORD_CREATED', 'profile', created.id);
   };
 
   const handleUpdateUser = async (userId: string, data: Partial<UserProfile>) => {
@@ -239,7 +269,9 @@ export default function App() {
 
   const handleAdminAuthSuccess = (profile: UserProfile) => {
     setCurrentTenant(previous => ({ ...previous, id: profile.tenantId }));
+    apiService.getTenant(profile.tenantId).then(tenant=>{if(tenant){setCurrentTenant(tenant);setTenants([tenant]);}});
     setCurrentUser(profile);
+    usageAnalytics.track(profile.tenantId, profile.id, 'session', 'SESSION_START');
     const hasAdminAccess = ['SUPERADMIN', 'DIRETORIA', 'RESPONSAVEL_TECNICA', 'ADMIN_EMPRESA'].includes(profile.roleCode);
     setIsAdminAuthenticated(hasAdminAccess);
     setShowAdminLoginModal(false);
@@ -251,6 +283,36 @@ export default function App() {
       setCurrentView(hasAdminAccess ? 'settings' : 'dashboard');
     }
   };
+
+  if (isSaasTrialHost && isCommercialCustomersAdmin) {
+    return <Suspense fallback={<ModuleLoading />}><CommercialCustomersAdmin /></Suspense>;
+  }
+
+  if (isSaasTrialHost && isPlatformAdmin) {
+    return <Suspense fallback={<ModuleLoading />}><PlatformAdmin /></Suspense>;
+  }
+
+  if (isSaasTrialHost && isMarketingAnalyticsAdmin) {
+    return <Suspense fallback={<ModuleLoading />}><MarketingAnalyticsAdmin /></Suspense>;
+  }
+
+  if (isSaasTrialHost && isCommercialAlertsAdmin) {
+    return <Suspense fallback={<ModuleLoading />}><CommercialAlertsAdmin /></Suspense>;
+  }
+
+  if (isSaasTrialHost && isCommercialOrderAdmin) {
+    return <Suspense fallback={<ModuleLoading />}><CommercialOrderAdmin /></Suspense>;
+  }
+
+  if (isSaasTrialHost && isCommercialTrialAdmin) {
+    return <Suspense fallback={<ModuleLoading />}><CommercialTrialAdmin /></Suspense>;
+  }
+
+  // No host comercial, a raiz continua sendo a landing page. A rota
+  // /sacproh abre o aplicativo autenticado para trial e homologacao.
+  if (isSaasTrialHost && !isSacProhPath) {
+    return <Suspense fallback={<ModuleLoading />}><SaasTrialPortal /></Suspense>;
+  }
 
   if (appMode === 'portal') {
     return (
@@ -333,7 +395,7 @@ export default function App() {
           ) : (
             <>
               {currentView === 'dashboard' && (
-                <ExecutiveDashboard tickets={tickets} />
+                <ExecutiveDashboard tickets={tickets} tenant={currentTenant} />
               )}
 
               {currentView === 'tickets' && (
@@ -351,10 +413,6 @@ export default function App() {
                 />
               )}
 
-              {currentView === 'risk' && (
-                <RiskManagement tenant={currentTenant} currentUser={currentUser} tickets={tickets} products={products} />
-              )}
-
               {currentView === 'technical' && (
                 <TechnicalModule 
                   cases={technicalCases}
@@ -364,6 +422,7 @@ export default function App() {
                   onCreateOS={handleCreateOS}
                   onUpdateOS={handleUpdateOS}
                   onDeleteOS={handleDeleteOS}
+                  tenant={currentTenant}
                 />
               )}
 
@@ -380,7 +439,19 @@ export default function App() {
               )}
 
               {currentView === 'reports' && (
-                <ExecutiveDashboard tickets={tickets} />
+                <ExecutiveDashboard tickets={tickets} tenant={currentTenant} />
+              )}
+
+              {currentView === 'traceability' && (
+                <TraceabilityIntelligence tickets={tickets} products={products} tenantId={currentTenant.id} userRole={currentUser.roleCode} />
+              )}
+
+              {currentView === 'regulatory' && (
+                <RegulatoryReports tenant={currentTenant} currentUser={currentUser} tickets={tickets} products={products} />
+              )}
+
+              {currentView === 'risk' && (
+                <RiskManagement tenant={currentTenant} currentUser={currentUser} tickets={tickets} products={products} />
               )}
 
               {currentView === 'users' && (

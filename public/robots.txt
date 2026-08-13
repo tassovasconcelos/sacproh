@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /commercial-trials
+Disallow: /commercial-orders
+Disallow: /commercial-alerts
+Disallow: /commercial-customers
+Disallow: /marketing-analytics
+Sitemap: https://apps.sacproh.gritnews.com.br/sitemap.xml

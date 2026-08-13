@@ -6,6 +6,7 @@ import {
 import { Tenant, UserProfile, UserRole } from '../../types';
 import { SpreadsheetImporter } from '../import/SpreadsheetImporter';
 import { apiService } from '../../services/apiService';
+import { BrandingSettings } from './BrandingSettings';
 
 interface SettingsModuleProps {
   tenants: Tenant[];
@@ -26,7 +27,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   onResetData,
   currentUser
 }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'import' | 'reset' | 'roles' | 'tenants'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'import' | 'reset' | 'roles' | 'tenants' | 'branding'>('users');
   const [userSearch, setUserSearch] = useState('');
   
   // Edit User State
@@ -140,6 +141,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         
         {/* Navigation Tabs */}
         <div className="flex overflow-x-auto border-b border-slate-200 bg-slate-50 px-4">
+          <button onClick={() => setActiveTab('branding')} className={`px-4 py-3 font-bold flex items-center space-x-2 border-b-2 whitespace-nowrap ${activeTab === 'branding' ? 'border-[#145EDB] text-[#145EDB] bg-white' : 'border-transparent text-slate-600 hover:text-slate-900'}`}><Building2 className="w-4 h-4"/><span>Marca & Documentos</span></button>
           <button
             onClick={() => setActiveTab('users')}
             className={`px-4 py-3 font-bold flex items-center space-x-2 border-b-2 whitespace-nowrap ${
@@ -193,6 +195,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
         {/* TAB CONTENTS */}
         <div className="p-5">
+          {activeTab === 'branding' && <BrandingSettings tenant={currentTenant}/>}
           
           {/* TAB 1: USERS & PROFILES MANAGEMENT */}
           {activeTab === 'users' && (

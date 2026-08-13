@@ -33,19 +33,19 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <header className="h-16 bg-[#202124] text-white border-b border-black/20 px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 shadow-md">
+    <header className="h-16 bg-[#0B2343] text-white border-b border-black/20 px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 shadow-md">
       {/* Left Branding & Tenant Switcher */}
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-3">
           <img
-            src="/procirurgica-logo.png"
-            alt="Procirúrgica"
-            className="h-7 md:h-8 w-auto max-w-[180px] object-contain"
+            src="/grit-logo.png"
+            alt="GRIT Soluções e Negócios"
+            className="h-10 w-44 object-cover object-center"
           />
           <div className="hidden sm:block border-l border-slate-600 pl-3">
             <div className="flex items-center space-x-2">
               <span className="font-bold text-sm tracking-wide text-white">SAC</span>
-              <span className="text-[10px] bg-[#E51B2B] text-white px-1.5 py-0.5 rounded font-mono font-semibold">4.0</span>
+              <span className="text-[10px] bg-[#FF8500] text-white px-1.5 py-0.5 rounded font-mono font-semibold">4.0</span>
             </div>
             <p className="text-[10px] text-slate-300 font-medium">{currentTenant.tradeName || currentTenant.name}</p>
           </div>
@@ -53,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Tenant Selector Dropdown */}
         <div className="hidden lg:flex items-center bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">
-          <Building2 className="w-3.5 h-3.5 text-[#E51B2B] mr-2" />
+          <Building2 className="w-3.5 h-3.5 text-[#FF8500] mr-2" />
           <select 
             value={currentTenant.id} 
             onChange={(e) => {
@@ -80,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
             placeholder="Buscar por protocolo (Ex: SAC.2607.001), cliente, produto, lote..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-slate-800/90 text-sm text-slate-100 placeholder-slate-400 pl-9 pr-4 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:border-[#E51B2B] transition-all"
+            className="w-full bg-slate-800/90 text-sm text-slate-100 placeholder-slate-400 pl-9 pr-4 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:border-[#FF8500] transition-all"
           />
         </div>
       </div>
@@ -89,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center space-x-3">
         {/* Perfil vinculado à sessão autenticada */}
         <div className="flex items-center bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#E51B2B] mr-2" />
+          <ShieldCheck className="w-3.5 h-3.5 text-[#FF8500] mr-2" />
           <span className="text-slate-400 mr-1 hidden sm:inline">Perfil:</span>
           <span className="text-slate-100 font-semibold">
             {rolesList.find(r => r.code === currentUser.roleCode)?.label || currentUser.roleCode}
@@ -99,12 +99,12 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Notifications Icon */}
         <button className="relative p-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
           <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#E51B2B] ring-2 ring-[#202124]"></span>
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#FF8500] ring-2 ring-[#0B2343]"></span>
         </button>
 
         {/* User Avatar */}
         <div className="flex items-center space-x-2.5 border-l border-slate-700/80 pl-3">
-          <div className="w-8 h-8 rounded-full bg-[#E51B2B] text-white font-bold text-xs flex items-center justify-center ring-2 ring-slate-600">
+          <div className="w-8 h-8 rounded-full bg-[#FF8500] text-white font-bold text-xs flex items-center justify-center ring-2 ring-slate-600">
             {currentUser.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
           </div>
           <div className="hidden xl:block text-left">

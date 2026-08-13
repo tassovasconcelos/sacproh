@@ -2,6 +2,7 @@
   "name": "grit-sac-4",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@10.28.2",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -11,7 +12,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.cjs",
     "lint": "tsc --noEmit",
-    "test": "tsx --test tests/**/*.test.ts"
+    "commercial:guard": "node scripts/check-commercial-release.mjs",
+    "check": "pnpm commercial:guard && pnpm lint && pnpm build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
