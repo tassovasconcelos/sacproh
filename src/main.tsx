@@ -4,11 +4,17 @@ import App from './App.tsx';
 import './index.css';
 import './services/operationalHotfix';
 import {initializeMarketingAnalytics} from './services/marketingAnalytics';
+import {initializeSecureAuth} from './services/secureAuth';
 
-initializeMarketingAnalytics();
+const bootstrap = async () => {
+  await initializeSecureAuth();
+  initializeMarketingAnalytics();
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+};
+
+void bootstrap();
