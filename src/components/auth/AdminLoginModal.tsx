@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { ArrowRight, Key, Mail, ShieldAlert, X } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
@@ -45,16 +44,16 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
       setErrorMsg('');
       setSuccessMsg('');
       const redirectTo = `${window.location.origin}${window.location.pathname}`;
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
       setIsSubmitting(false);
       if (error) {
         const isRateLimited = error.message.toLowerCase().includes('rate limit');
         setErrorMsg(isRateLimited
           ? 'Muitas solicitações foram feitas. Aguarde alguns minutos e tente novamente.'
-          : `Não foi possível enviar a recuperação: ${error.message}`);
+          : `Não foi possível enviar o acesso: ${error.message}`);
         return;
       }
-      setSuccessMsg('Enviamos um novo link de recuperação para seu e-mail.');
+      setSuccessMsg('Se o e-mail estiver cadastrado, você receberá um link para definir ou recuperar sua senha.');
       return;
     }
 
@@ -75,17 +74,17 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
         setErrorMsg('Não foi possível atualizar a senha. Solicite um novo link.');
         return;
       }
-      setSuccessMsg('Senha atualizada. Você já pode entrar na Área ADM.');
+      setSuccessMsg('Senha atualizada. Entre novamente com seu e-mail e a nova senha.');
       setPassword('');
       setPasswordConfirmation('');
       setMode('login');
       setRecoveryActive(false);
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       return;
     }
 
     if (!email || !password) {
-      setErrorMsg('Preencha o e-mail e a senha de administrador.');
+      setErrorMsg('Preencha o e-mail e a senha.');
       return;
     }
     if (!isSupabaseConfigured) {
@@ -96,9 +95,10 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
     setIsSubmitting(true);
     setErrorMsg('');
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const normalizedEmail = email.trim().toLowerCase();
+      const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
       if (error || !data.user) {
-        setErrorMsg('E-mail ou senha incorretos.');
+        setErrorMsg('E-mail ou senha incorretos. Se for seu primeiro acesso, use a opção abaixo para definir a senha.');
         return;
       }
 
@@ -109,10 +109,13 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
         .single();
 
       if (profileError || !profile?.is_active) {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
         setErrorMsg('Seu usuário não possui um perfil ativo no SAC.');
         return;
       }
+
+      const accessedAt = new Date().toISOString();
+      await supabase.from('profiles').update({ last_access_at: accessedAt }).eq('id', data.user.id);
       onSuccess({
         id: data.user.id,
         tenantId: profile.tenant_id,
@@ -128,7 +131,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
         roleCode: profile.role_code,
         avatarUrl: profile.avatar_url || undefined,
         isActive: profile.is_active,
-        lastAccessAt: profile.last_access_at || undefined
+        lastAccessAt: accessedAt
       });
     } catch {
       setErrorMsg('Não foi possível autenticar agora. Tente novamente.');
@@ -145,8 +148,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
             <img src="/procirurgica-logo.png" alt="Procirúrgica" className="h-10 w-auto object-contain" />
             <div>
               <strong className="mb-1.5 block text-sm tracking-wide text-white">SACPROH · Procirúrgica</strong>
-              <h3 className="font-extrabold text-sm text-white">Área Restrita ADM</h3>
-              <p className="text-[11px] text-slate-400">Autenticação segura pelo Supabase</p>
+              <h3 className="font-extrabold text-sm text-white">Acesso Seguro ao SAC 4.0</h3>
+              <p className="text-[11px] text-slate-400">Identificação individual e trilha de auditoria</p>
             </div>
           </div>
           <button onClick={() => { setRecoveryActive(false); onClose(); }} className="p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar">
@@ -156,7 +159,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <p className="text-slate-300 leading-relaxed text-[11px]">
-            O acesso é restrito a administradores, diretoria e responsáveis técnicos autorizados.
+            Entre com seu usuário individual. O sistema aplica automaticamente as permissões do seu perfil: SAC, Responsável Técnica, Técnico, Logística, Diretoria ou Administração.
           </p>
           {errorMsg && (
             <div className="p-3 bg-red-950/80 border border-red-700 text-red-200 rounded-xl flex items-center space-x-2">
@@ -169,10 +172,10 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
             </div>
           )}
           {mode !== 'update-password' && <label className="block font-bold text-slate-300">
-            E-mail de administrador
+            E-mail corporativo
             <span className="relative block mt-1">
               <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="username" autoCapitalize="none"
                 className="w-full bg-slate-900 border border-slate-700 pl-9 pr-3 py-2.5 rounded-xl text-white outline-none focus:border-[#145EDB]" />
             </span>
           </label>}
@@ -180,7 +183,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
             {mode === 'update-password' ? 'Nova senha' : 'Senha'}
             <span className="relative block mt-1">
               <Key className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete={mode === 'update-password' ? 'new-password' : 'current-password'}
                 className="w-full bg-slate-900 border border-slate-700 pl-9 pr-3 py-2.5 rounded-xl text-white outline-none focus:border-[#145EDB]" />
             </span>
           </label>}
@@ -189,7 +192,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
               Confirmar nova senha
               <span className="relative block mt-1">
                 <Key className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                <input type="password" value={passwordConfirmation} onChange={e => setPasswordConfirmation(e.target.value)} required
+                <input type="password" value={passwordConfirmation} onChange={e => setPasswordConfirmation(e.target.value)} required autoComplete="new-password"
                   className="w-full bg-slate-900 border border-slate-700 pl-9 pr-3 py-2.5 rounded-xl text-white outline-none focus:border-[#FF8500]" />
               </span>
             </label>
@@ -197,17 +200,17 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
           {mode === 'login' && (
             <button type="button" onClick={() => { setMode('request-reset'); setErrorMsg(''); setSuccessMsg(''); }}
               className="text-[#FF8500] font-bold hover:underline">
-              Esqueci minha senha
+              Primeiro acesso ou esqueci minha senha
             </button>
           )}
           <div className="p-3 bg-slate-900/70 rounded-xl border border-slate-800 text-[11px] text-slate-400">
-            O acesso é validado pelo Supabase. Nunca compartilhe sua senha.
+            Uma nova aba do SAC exige autenticação. Use “Sair” ao encerrar o atendimento em computadores compartilhados.
           </div>
           <div className="pt-2 flex items-center justify-end space-x-2">
             <button type="button" onClick={() => mode === 'login' ? onClose() : setMode('login')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl">{mode === 'login' ? 'Cancelar' : 'Voltar'}</button>
             <button type="submit" disabled={isSubmitting}
               className="px-5 py-2.5 bg-[#145EDB] hover:bg-[#0f4bb3] disabled:opacity-60 text-white font-extrabold rounded-xl shadow-lg flex items-center space-x-2">
-              <span>{isSubmitting ? 'Processando...' : mode === 'request-reset' ? 'Enviar recuperação' : mode === 'update-password' ? 'Salvar nova senha' : 'Entrar na Área ADM'}</span><ArrowRight className="w-4 h-4" />
+              <span>{isSubmitting ? 'Processando...' : mode === 'request-reset' ? 'Enviar link de acesso' : mode === 'update-password' ? 'Salvar nova senha' : 'Entrar no SAC 4.0'}</span><ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </form>
@@ -215,4 +218,3 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
     </div>
   );
 };
-
