@@ -1,0 +1,42 @@
+name: GRIT Auto Update
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-update-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate and build
+        shell: bash
+        run: |
+          set -e
+          if [ -f package.json ]; then
+            npm install --no-audit --no-fund
+            npm run lint --if-present
+            npm run build --if-present
+          else
+            echo "No root package.json; repository validation skipped."
+          fi
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger hosting deploy
+        env:
+          HOSTINGER_DEPLOY_HOOK: ${{ secrets.HOSTINGER_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$HOSTINGER_DEPLOY_HOOK" ]; then curl --fail --show-error --silent --retry 3 -X POST "$HOSTINGER_DEPLOY_HOOK"; else echo "HOSTINGER_DEPLOY_HOOK not configured; deploy skipped."; fi
