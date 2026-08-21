@@ -1,142 +1,160 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
-import { TrendingUp, Clock, AlertTriangle, CheckCircle2, Filter, Printer, RefreshCw } from 'lucide-react';
-import { Tenant, Ticket, UserProfile } from '../../types';
-import { BrandedDocumentFooter, BrandedDocumentHeader } from '../documents/BrandedDocumentHeader';
-import { brandingService, defaultBranding } from '../../services/brandingService';
+import React, { useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Clock, Download, FileSpreadsheet, Filter, PackageSearch, Printer, TrendingUp } from 'lucide-react';
+import type { Tenant, Ticket, UserProfile } from '../../types';
 
 interface ExecutiveDashboardProps { tickets: Ticket[]; tenant: Tenant; currentUser?: UserProfile | null; }
 
-const CLOSED = new Set(['CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT']);
-const STATUS_LABELS: Record<string,string> = {
-  NEW:'Novo', TRIAGE:'Triagem', TECHNICAL_ANALYSIS:'Análise técnica', SENT_TO_TECHNICAL:'Assistência técnica',
-  SENT_TO_LOGISTICS:'Logística', WAITING_CUSTOMER:'Aguardando cliente', WAITING_SUPPLIER:'Aguardando fornecedor',
-  CLOSED_PROCEDENT:'Encerrado procedente', CLOSED_NON_PROCEDENT:'Encerrado não procedente'
+const CLOSED = new Set(['CLOSED_PROCEDENT', 'CLOSED_NON_PROCEDENT', 'CANCELLED']);
+const escapeCsv = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+const downloadText = (name: string, content: string, type: string) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 };
+
 export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({ tickets, tenant, currentUser }) => {
   const [period, setPeriod] = useState<'30'|'90'|'365'|'ALL'>('ALL');
   const [status, setStatus] = useState('ALL');
   const [priority, setPriority] = useState('ALL');
-  const [branding,setBranding]=useState({...defaultBranding,tenantId:tenant.id});
-  useEffect(()=>{brandingService.get(tenant.id).then(setBranding).catch(()=>undefined);},[tenant.id]);
+  const [category, setCategory] = useState('ALL');
+  const [productQuery, setProductQuery] = useState('');
 
   const filtered = useMemo(() => {
     const limit = period === 'ALL' ? null : Date.now() - Number(period) * 86400000;
-    return tickets.filter(ticket => (!limit || new Date(ticket.createdAt).getTime() >= limit)
-      && (status === 'ALL' || ticket.status === status)
-      && (priority === 'ALL' || ticket.priority === priority));
-  }, [tickets, period, status, priority]);
+    const q = productQuery.trim().toLocaleLowerCase('pt-BR');
+    return tickets.filter(ticket => {
+      const byDate = !limit || new Date(ticket.createdAt).getTime() >= limit;
+      const byStatus = status === 'ALL' || ticket.status === status;
+      const byPriority = priority === 'ALL' || ticket.priority === priority;
+      const byCategory = category === 'ALL' || ticket.category === category;
+      const byProduct = !q || (ticket.items || []).some(item => [item.productName, item.productModel, item.productDescription, item.sku, item.lotNumber, item.serialNumber].some(value => value?.toLocaleLowerCase('pt-BR').includes(q)));
+      return byDate && byStatus && byPriority && byCategory && byProduct;
+    });
+  }, [tickets, period, status, priority, category, productQuery]);
+
+  const categories = useMemo(() => [...new Set(tickets.map(t => t.category).filter(Boolean))].sort(), [tickets]);
 
   const metrics = useMemo(() => {
     const closed = filtered.filter(t => CLOSED.has(t.status));
+    const open = filtered.length - closed.length;
     const critical = filtered.filter(t => t.priority === 'CRITICAL' || t.userRiskFlag || t.adverseEventFlag).length;
     const overdue = filtered.filter(t => !CLOSED.has(t.status) && t.slaDueAt && new Date(t.slaDueAt).getTime() < Date.now()).length;
-    const slaBase = closed.filter(t => t.slaDueAt && t.closedAt);
-    const slaOnTime = slaBase.filter(t => new Date(t.closedAt!).getTime() <= new Date(t.slaDueAt!).getTime()).length;
-    const averageDays = closed.length ? closed.reduce((sum,t) => sum + Math.max(0,(new Date(t.closedAt || t.updatedAt).getTime()-new Date(t.createdAt).getTime())/86400000),0)/closed.length : null;
-    return { total:filtered.length, closed:closed.length, open:filtered.length-closed.length, critical, overdue,
-      sla:slaBase.length ? (slaOnTime/slaBase.length)*100 : null, averageDays };
+    const averageDays = closed.length ? closed.reduce((sum,t) => sum + Math.max(0,(new Date(t.closedAt || t.updatedAt).getTime()-new Date(t.createdAt).getTime())/86400000),0)/closed.length : 0;
+    return { total: filtered.length, closed: closed.length, open, critical, overdue, averageDays };
   }, [filtered]);
 
-  const categoryData = useMemo(() => (Object.entries(filtered.reduce<Record<string,number>>((acc,t) => {
-    const key=t.category || 'Não classificado'; acc[key]=(acc[key]||0)+1; return acc;
-  },{})) as Array<[string,number]>).sort((a,b)=>b[1]-a[1]).map(([name,value],index)=>{const colors=[branding.primaryColor,branding.accentColor,branding.secondaryColor,'#22A06B','#D92D20','#7C3AED','#64748B'];return{name,value,color:colors[index%colors.length]};}),[filtered,branding]);
+  const productQuality = useMemo(() => {
+    const items = filtered.flatMap(ticket => (ticket.items || []).map(item => ({ ticket, item })));
+    const withDescription = items.filter(({item}) => Boolean(item.productDescription?.trim())).length;
+    const withModel = items.filter(({item}) => Boolean(item.productModel?.trim())).length;
+    const withTraceability = items.filter(({item}) => Boolean(item.lotNumber?.trim() || item.serialNumber?.trim())).length;
+    const incomplete = items.filter(({item}) => !item.productDescription?.trim() || !item.productModel?.trim() || (!item.lotNumber?.trim() && !item.serialNumber?.trim()));
+    return {
+      total: items.length,
+      descriptionRate: items.length ? (withDescription/items.length)*100 : 100,
+      modelRate: items.length ? (withModel/items.length)*100 : 100,
+      traceabilityRate: items.length ? (withTraceability/items.length)*100 : 100,
+      incomplete
+    };
+  }, [filtered]);
 
-  const paretoData = useMemo(() => {
-    const total=Math.max(filtered.length,1); let accumulated=0;
-    return categoryData.slice(0,8).map(item => { accumulated+=item.value; return {cause:item.name,count:item.value,percentage:Number((accumulated/total*100).toFixed(1))}; });
-  },[categoryData,filtered.length]);
+  const topCategories = useMemo(() => Object.entries(filtered.reduce<Record<string,number>>((acc,t) => {
+    const key = t.category || 'Não classificado'; acc[key] = (acc[key] || 0) + 1; return acc;
+  }, {})).sort((a,b) => b[1]-a[1]).slice(0,10), [filtered]);
 
-  const statusData = useMemo(() => (Object.entries(filtered.reduce<Record<string,number>>((acc,t)=>{acc[t.status]=(acc[t.status]||0)+1;return acc;},{})) as Array<[string,number]>)
-    .map(([key,value])=>({name:STATUS_LABELS[key]||key,value})).sort((a,b)=>b.value-a.value),[filtered]);
+  const topProducts = useMemo(() => Object.entries(filtered.flatMap(t => t.items || []).reduce<Record<string,number>>((acc,item) => {
+    const key = [item.productName, item.productModel].filter(Boolean).join(' · ') || 'Produto não identificado';
+    acc[key] = (acc[key] || 0) + Number(item.quantity || 1); return acc;
+  }, {})).sort((a,b) => b[1]-a[1]).slice(0,10), [filtered]);
 
-  const monthlyData = useMemo(() => {
-    const months=new Map<string,{sort:string;month:string;novos:number;encerrados:number}>();
-    filtered.forEach(t=>{
-      const opened=new Date(t.createdAt); const key=`${opened.getFullYear()}-${String(opened.getMonth()+1).padStart(2,'0')}`;
-      const item=months.get(key)||{sort:key,month:opened.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}),novos:0,encerrados:0}; item.novos++; months.set(key,item);
-      if(CLOSED.has(t.status) && t.closedAt){const closed=new Date(t.closedAt);const cKey=`${closed.getFullYear()}-${String(closed.getMonth()+1).padStart(2,'0')}`;const c=months.get(cKey)||{sort:cKey,month:closed.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}),novos:0,encerrados:0};c.encerrados++;months.set(cKey,c);}
-    }); return [...months.values()].sort((a,b)=>a.sort.localeCompare(b.sort)).slice(-12);
-  },[filtered]);
+  const recurring = useMemo(() => Object.entries(filtered.reduce<Record<string,number>>((acc,t) => {
+    acc[t.customerName] = (acc[t.customerName] || 0) + 1; return acc;
+  }, {})).filter(([,count]) => count > 1).sort((a,b) => b[1]-a[1]).slice(0,10), [filtered]);
 
-  const responsibleData = useMemo(() => (Object.entries(filtered.reduce<Record<string,number>>((acc,t)=>{const key=t.assignedToName||t.assignedArea||'Sem responsável';acc[key]=(acc[key]||0)+1;return acc;},{})) as Array<[string,number]>)
-    .sort((a,b)=>b[1]-a[1]).slice(0,8),[filtered]);
+  const exportRows = () => filtered.flatMap(ticket => (ticket.items?.length ? ticket.items : [undefined]).map(item => ({
+    Protocolo: ticket.protocol,
+    Abertura: new Date(ticket.createdAt).toLocaleString('pt-BR'),
+    Status: ticket.status,
+    Prioridade: ticket.priority,
+    Categoria: ticket.category,
+    Subcategoria: ticket.subcategory || '',
+    Cliente: ticket.customerName,
+    DocumentoCliente: ticket.customerDocument,
+    DescricaoOcorrencia: ticket.description,
+    Responsavel: ticket.assignedToName || ticket.assignedArea || '',
+    Produto: item?.productName || '',
+    DescricaoProduto: item?.productDescription || '',
+    Modelo: item?.productModel || '',
+    SKU: item?.sku || '',
+    Quantidade: item?.quantity || '',
+    Lote: item?.lotNumber || '',
+    Serie: item?.serialNumber || '',
+    Anvisa: item?.anvisaRegister || '',
+    Fabricante: item?.manufacturerName || '',
+    Importador: item?.importerName || '',
+    Distribuidor: item?.distributorName || '',
+    SLA: ticket.slaDueAt ? new Date(ticket.slaDueAt).toLocaleString('pt-BR') : '',
+    Encerramento: ticket.closedAt ? new Date(ticket.closedAt).toLocaleString('pt-BR') : ''
+  })));
 
-  const executiveIndicators = useMemo(() => {
-    const open = filtered.filter(ticket => !CLOSED.has(ticket.status) && ticket.status !== 'CANCELLED');
-    const items = filtered.flatMap(ticket => ticket.items || []);
-    const traceableItems = items.filter(item => Boolean(item.lotNumber?.trim() || item.serialNumber?.trim())).length;
-    const missingTraceability = filtered.filter(ticket => (ticket.items || []).some(item => !item.lotNumber?.trim() && !item.serialNumber?.trim()));
-    const aging30 = open.filter(ticket => Date.now() - new Date(ticket.createdAt).getTime() > 30 * 86400000).length;
-    const customers = filtered.reduce<Record<string,number>>((acc,ticket) => { acc[ticket.customerName] = (acc[ticket.customerName] || 0) + 1; return acc; },{});
-    return { resolutionRate:filtered.length?(metrics.closed/filtered.length)*100:0, traceabilityRate:items.length?(traceableItems/items.length)*100:100, missingTraceability, aging30, recurringCustomers:(Object.values(customers) as number[]).filter(count=>count>1).length, riskOpen:open.filter(ticket=>ticket.userRiskFlag||ticket.adverseEventFlag||ticket.damageFlag).length, estimatedHoursSaved:Math.round(metrics.closed*.75) };
-  }, [filtered, metrics.closed]);
+  const exportCsv = () => {
+    const rows = exportRows();
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    const csv = '\uFEFF' + [headers.map(escapeCsv).join(';'), ...rows.map(row => headers.map(key => escapeCsv((row as any)[key])).join(';'))].join('\n');
+    downloadText(`sacproh-relatorio-${new Date().toISOString().slice(0,10)}.csv`, csv, 'text/csv;charset=utf-8');
+  };
 
-  const regulatoryAlerts = useMemo(() => filtered
-    .filter(ticket => !CLOSED.has(ticket.status) && ticket.status !== 'CANCELLED')
-    .map(ticket => {
-      const openedAt = new Date(ticket.createdAt).getTime();
-      const legalDueAt = openedAt + 30 * 86400000;
-      const ageDays = Math.max(0, Math.floor((Date.now() - openedAt) / 86400000));
-      const remainingDays = Math.ceil((legalDueAt - Date.now()) / 86400000);
-      const level = ageDays >= 28 ? 'CRÍTICO' : ageDays >= 25 ? 'URGENTE' : ageDays >= 20 ? 'ATENÇÃO' : null;
-      return { ticket, legalDueAt, ageDays, remainingDays, level };
-    })
-    .filter(alert => alert.level || alert.ticket.userRiskFlag || alert.ticket.adverseEventFlag)
-    .sort((a,b) => a.legalDueAt - b.legalDueAt), [filtered]);
+  const exportXlsx = async () => {
+    const rows = exportRows();
+    if (!rows.length) return;
+    const XLSX = await import('xlsx');
+    const workbook = XLSX.utils.book_new();
+    const details = XLSX.utils.json_to_sheet(rows);
+    const summary = XLSX.utils.aoa_to_sheet([
+      ['SACPROH - Relatório Gerencial'],
+      ['Empresa', tenant.tradeName || tenant.name],
+      ['Emitido por', currentUser?.fullName || 'Usuário SAC'],
+      ['Emitido em', new Date().toLocaleString('pt-BR')],
+      ['SACs filtrados', metrics.total],
+      ['Em andamento', metrics.open],
+      ['Encerrados', metrics.closed],
+      ['Críticos / risco', metrics.critical],
+      ['SLA vencido', metrics.overdue],
+      ['Descrição completa de produto (%)', Number(productQuality.descriptionRate.toFixed(1))],
+      ['Rastreabilidade (%)', Number(productQuality.traceabilityRate.toFixed(1))]
+    ]);
+    XLSX.utils.book_append_sheet(workbook, summary, 'Resumo');
+    XLSX.utils.book_append_sheet(workbook, details, 'Protocolos');
+    XLSX.writeFile(workbook, `sacproh-relatorio-${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
 
-  return <div className="space-y-5 print:space-y-3">
-    <BrandedDocumentHeader tenant={tenant} title="Relatório Gerencial do SAC" reference={`Emitido em ${new Date().toLocaleString('pt-BR')}`}/>
-    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-      <div className="flex flex-col md:flex-row justify-between gap-3"><div><h1 className="text-xl font-bold text-[#10233F]">Relatório Gerencial do SAC</h1>
-        <p className="text-xs text-slate-500">Dados reais dos chamados registrados no Supabase · Atualizado em {new Date().toLocaleString('pt-BR')}</p></div>
-        <div className="flex gap-2"><button onClick={()=>window.location.reload()} className="px-3 py-2 border rounded-lg text-xs font-bold flex gap-1 items-center"><RefreshCw className="w-3.5 h-3.5"/>Atualizar</button><button onClick={()=>window.print()} className="px-3 py-2 bg-[#145EDB] text-white rounded-lg text-xs font-bold flex gap-1 items-center"><Printer className="w-3.5 h-3.5"/>Imprimir / PDF</button></div></div>
-      <div className="flex flex-wrap gap-2 text-xs print:hidden"><Filter className="w-4 h-4 text-[#145EDB] mt-2"/>
-        <select value={period} onChange={e=>setPeriod(e.target.value as any)} className="border rounded-lg p-2"><option value="ALL">Todo o histórico</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="365">Últimos 12 meses</option></select>
-        <select value={status} onChange={e=>setStatus(e.target.value)} className="border rounded-lg p-2"><option value="ALL">Todos os status</option>{Object.entries(STATUS_LABELS).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>
-        <select value={priority} onChange={e=>setPriority(e.target.value)} className="border rounded-lg p-2"><option value="ALL">Todas as prioridades</option><option value="LOW">Baixa</option><option value="MEDIUM">Média</option><option value="HIGH">Alta</option><option value="CRITICAL">Crítica</option></select>
+  return <div className="space-y-5">
+    <section className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div><p className="text-[10px] uppercase tracking-[.18em] font-black text-[#145EDB]">SACPROH · Inteligência operacional</p><h1 className="text-2xl font-black text-[#10233F]">Relatórios Gerenciais e Qualidade dos Dados</h1><p className="text-xs text-slate-500 mt-1">Filtros, recorrência, produtos, rastreabilidade e exportação para análise da diretoria e responsável técnica.</p></div>
+        <div className="flex flex-wrap gap-2 print:hidden"><button onClick={exportCsv} className="px-3 py-2 border rounded-lg text-xs font-bold flex items-center gap-1"><Download className="w-4 h-4"/>CSV</button><button onClick={exportXlsx} className="px-3 py-2 border rounded-lg text-xs font-bold flex items-center gap-1"><FileSpreadsheet className="w-4 h-4"/>Excel</button><button onClick={()=>window.print()} className="px-3 py-2 bg-[#145EDB] text-white rounded-lg text-xs font-bold flex items-center gap-1"><Printer className="w-4 h-4"/>PDF / Imprimir</button></div>
       </div>
-    </div>
-
-    <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-      {[
-        ['Total de SACs',metrics.total,'text-[#10233F]',<TrendingUp/>],['Em andamento',metrics.open,'text-[#FF8500]',<Clock/>],['Encerrados',metrics.closed,'text-[#22A06B]',<CheckCircle2/>],
-        ['Críticos / risco',metrics.critical,'text-[#D92D20]',<AlertTriangle/>],['SLA vencido',metrics.overdue,'text-[#D92D20]',<Clock/>],['SLA cumprido',metrics.sla===null?'Sem base':`${metrics.sla.toFixed(1)}%`,'text-[#22A06B]',<CheckCircle2/>]
-      ].map(([label,value,color,icon])=><div key={String(label)} className="bg-white p-4 rounded-xl border shadow-sm"><div className="flex justify-between text-slate-500"><span className="text-[10px] font-bold uppercase">{label}</span><span className="w-4 h-4">{icon as React.ReactNode}</span></div><p className={`text-2xl font-black ${color}`}>{value}</p></div>)}
-    </div>
-
-    <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0B2343] to-[#145EDB] p-5 text-white shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.2em] text-blue-200">Sala de situação da diretoria</p><h2 className="mt-1 text-xl font-black">Resultado, controle e exposição operacional</h2><p className="mt-1 text-xs text-blue-100">Leitura executiva da eficiência do SAC, rastreabilidade e risco regulatório.</p></div><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">{currentUser?.roleCode || 'DIRETORIA'}</span></div>
-      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-6">{[['Taxa de resolução',`${executiveIndicators.resolutionRate.toFixed(1)}%`],['Rastreabilidade',`${executiveIndicators.traceabilityRate.toFixed(1)}%`],['Backlog +30 dias',executiveIndicators.aging30],['Riscos em aberto',executiveIndicators.riskOpen],['Clientes recorrentes',executiveIndicators.recurringCustomers],['Horas operacionais poupadas*',executiveIndicators.estimatedHoursSaved]].map(([label,value])=><article key={String(label)} className="rounded-xl border border-white/10 bg-white/10 p-3"><strong className="text-2xl font-black">{value}</strong><p className="mt-1 text-[10px] font-bold uppercase text-blue-100">{label}</p></article>)}</div>
-      <p className="mt-3 text-[10px] text-blue-200">*Estimativa configurável baseada em 45 minutos evitados por ocorrência encerrada; não representa economia contábil auditada.</p>
+      <div className="flex flex-wrap gap-2 text-xs print:hidden"><Filter className="w-4 h-4 text-[#145EDB] mt-2"/><select value={period} onChange={e=>setPeriod(e.target.value as any)} className="border rounded-lg p-2"><option value="ALL">Todo histórico</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">12 meses</option></select><select value={status} onChange={e=>setStatus(e.target.value)} className="border rounded-lg p-2"><option value="ALL">Todos os status</option>{[...new Set(tickets.map(t=>t.status))].sort().map(value=><option key={value}>{value}</option>)}</select><select value={priority} onChange={e=>setPriority(e.target.value)} className="border rounded-lg p-2"><option value="ALL">Todas prioridades</option><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select><select value={category} onChange={e=>setCategory(e.target.value)} className="border rounded-lg p-2"><option value="ALL">Todas categorias</option>{categories.map(value=><option key={value}>{value}</option>)}</select><input value={productQuery} onChange={e=>setProductQuery(e.target.value)} placeholder="Produto, modelo, SKU, lote ou série" className="border rounded-lg p-2 min-w-64"/></div>
     </section>
-    <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-black text-amber-950">Qualidade cadastral para ANVISA e Inmetro</h3><p className="text-xs text-amber-800">Todo item deve possuir lote ou número de série. A RT e o Superadmin devem tratar as pendências antes da conclusão regulatória.</p></div><span className={`rounded-full px-3 py-1 text-xs font-black ${executiveIndicators.missingTraceability.length?'bg-red-100 text-red-700':'bg-emerald-100 text-emerald-700'}`}>{executiveIndicators.missingTraceability.length} SAC(s) incompleto(s)</span></div>{executiveIndicators.missingTraceability.length>0&&<div className="mt-4 overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left text-amber-900"><th className="p-2">Protocolo</th><th className="p-2">Cliente</th><th className="p-2">Produto sem rastreabilidade</th><th className="p-2">Responsável</th></tr></thead><tbody>{executiveIndicators.missingTraceability.slice(0,12).map(ticket=><tr key={ticket.id} className="border-t border-amber-200"><td className="p-2 font-mono font-black">{ticket.protocol}</td><td className="p-2">{ticket.customerName}</td><td className="p-2">{ticket.items.filter(item=>!item.lotNumber?.trim()&&!item.serialNumber?.trim()).map(item=>item.productName).join(', ')}</td><td className="p-2">{ticket.assignedToName||ticket.assignedArea||'RT a definir'}</td></tr>)}</tbody></table></div>}</section>
 
-    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
-        <div><h3 className="font-bold text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-[#D92D20]"/>Central de alertas da Responsável Técnica</h3>
-          <p className="text-xs text-slate-500">Atenção no 20º dia, urgente no 25º e crítico a partir do 28º dia. Limite final: 30 dias corridos.</p></div>
-        <span className={`px-3 py-1 rounded-full text-xs font-bold ${regulatoryAlerts.length ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>{regulatoryAlerts.length} SAC(s) exigindo atenção</span>
-      </div>
-      {regulatoryAlerts.length === 0 ? <p className="text-xs text-emerald-700 bg-emerald-50 p-3 rounded-lg">Nenhum SAC atingiu os marcos internos de alerta.</p> :
-        <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="bg-slate-50"><th className="p-2 text-left">Nível</th><th className="p-2 text-left">Protocolo</th><th className="p-2 text-left">Cliente / ocorrência</th><th className="p-2 text-left">Responsável</th><th className="p-2 text-right">Prazo legal</th></tr></thead>
-          <tbody>{regulatoryAlerts.map(({ticket,legalDueAt,ageDays,remainingDays,level})=><tr key={ticket.id} className="border-t"><td className="p-2"><span className={`px-2 py-1 rounded font-bold ${level==='CRÍTICO'?'bg-red-100 text-red-700':level==='URGENTE'?'bg-orange-100 text-orange-700':'bg-amber-100 text-amber-700'}`}>{level || 'RISCO'}</span></td><td className="p-2 font-mono font-bold text-[#145EDB]">{ticket.protocol}</td><td className="p-2"><strong>{ticket.customerName}</strong><br/><span className="text-slate-500">{ticket.category} · aberto há {ageDays} dia(s)</span></td><td className="p-2">{ticket.assignedToName || ticket.assignedArea || 'Não atribuído'}</td><td className="p-2 text-right"><strong>{new Date(legalDueAt).toLocaleDateString('pt-BR')}</strong><br/><span className={remainingDays <= 2 ? 'text-red-700 font-bold' : 'text-slate-500'}>{remainingDays < 0 ? `${Math.abs(remainingDays)} dia(s) vencido` : `${remainingDays} dia(s) restante(s)`}</span></td></tr>)}</tbody>
-        </table></div>}
-      <p className="text-[10px] text-slate-500 mt-3">Casos com risco ao usuário, evento adverso ou produto essencial devem ser tratados imediatamente, independentemente da contagem de 30 dias.</p>
-    </div>
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">{[
+      ['SACs',metrics.total,<TrendingUp className="w-4 h-4"/>],['Em andamento',metrics.open,<Clock className="w-4 h-4"/>],['Encerrados',metrics.closed,<CheckCircle2 className="w-4 h-4"/>],['Críticos / risco',metrics.critical,<AlertTriangle className="w-4 h-4"/>],['SLA vencido',metrics.overdue,<Clock className="w-4 h-4"/>],['Tempo médio',`${metrics.averageDays.toFixed(1)} d`,<TrendingUp className="w-4 h-4"/>]
+    ].map(([label,value,icon])=><article key={String(label)} className="bg-white p-4 rounded-xl border shadow-sm"><div className="flex items-center justify-between text-slate-500"><span className="text-[10px] font-bold uppercase">{label}</span>{icon as React.ReactNode}</div><strong className="text-2xl text-[#10233F]">{value}</strong></article>)}</div>
 
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div className="lg:col-span-2 bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Pareto real por categoria</h3><p className="text-xs text-slate-500 mb-3">Volume e percentual acumulado dos SACs</p><div className="h-64"><ResponsiveContainer><BarChart data={paretoData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="cause" tick={{fontSize:9}}/><YAxis yAxisId="left"/><YAxis yAxisId="right" orientation="right" domain={[0,100]}/><Tooltip/><Bar yAxisId="left" dataKey="count" fill={branding.primaryColor} name="SACs"/><Line yAxisId="right" dataKey="percentage" stroke={branding.accentColor} name="% acumulado"/></BarChart></ResponsiveContainer></div></div>
-      <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Distribuição por categoria</h3><div className="h-64"><ResponsiveContainer><PieChart><Pie data={categoryData} dataKey="value" nameKey="name" outerRadius={80}>{categoryData.map((x,i)=><Cell key={i} fill={x.color}/>)}</Pie><Tooltip/><Legend wrapperStyle={{fontSize:10}}/></PieChart></ResponsiveContainer></div></div>
-    </div>
+    <section className="bg-white p-5 rounded-2xl border shadow-sm space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black text-[#10233F] flex items-center gap-2"><PackageSearch className="w-5 h-5 text-[#145EDB]"/>Qualidade do cadastro de produto</h2><p className="text-xs text-slate-500">Mede se o protocolo possui dados suficientes para laudos, relatórios e rastreabilidade.</p></div><span className={`text-xs font-black rounded-full px-3 py-1 ${productQuality.incomplete.length ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{productQuality.incomplete.length} item(ns) com pendência</span></div><div className="grid grid-cols-1 md:grid-cols-3 gap-3">{[['Descrição completa',productQuality.descriptionRate],['Modelo',productQuality.modelRate],['Lote ou série',productQuality.traceabilityRate]].map(([label,value])=><div key={String(label)} className="p-4 rounded-xl bg-slate-50 border"><p className="text-xs font-bold text-slate-600">{label}</p><p className="text-2xl font-black text-[#10233F]">{Number(value).toFixed(1)}%</p><div className="h-2 bg-slate-200 rounded-full mt-2 overflow-hidden"><div className="h-full bg-[#145EDB]" style={{width:`${Math.min(100,Number(value))}%`}}/></div></div>)}</div>{productQuality.incomplete.length>0&&<div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50"><tr><th className="text-left p-2">Protocolo</th><th className="text-left p-2">Produto</th><th className="text-left p-2">Modelo</th><th className="text-left p-2">Pendências</th></tr></thead><tbody>{productQuality.incomplete.slice(0,30).map(({ticket,item},index)=><tr key={`${ticket.id}-${item.id}-${index}`} className="border-t"><td className="p-2 font-mono font-bold text-[#145EDB]">{ticket.protocol}</td><td className="p-2">{item.productName}</td><td className="p-2">{item.productModel||'-'}</td><td className="p-2 text-amber-800">{[!item.productDescription?.trim()?'descrição':null,!item.productModel?.trim()?'modelo':null,!item.lotNumber?.trim()&&!item.serialNumber?.trim()?'lote/série':null].filter(Boolean).join(', ')}</td></tr>)}</tbody></table></div>}</section>
 
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Evolução mensal</h3><p className="text-xs text-slate-500 mb-3">Aberturas versus encerramentos</p><div className="h-64"><ResponsiveContainer><LineChart data={monthlyData}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="month"/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Line dataKey="novos" stroke="#145EDB" strokeWidth={3} name="Abertos"/><Line dataKey="encerrados" stroke="#22A06B" strokeWidth={3} name="Encerrados"/></LineChart></ResponsiveContainer></div></div>
-      <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm">Situação atual</h3><p className="text-xs text-slate-500 mb-3">Quantidade por status</p><div className="h-64"><ResponsiveContainer><BarChart data={statusData} layout="vertical"><CartesianGrid strokeDasharray="3 3"/><XAxis type="number" allowDecimals={false}/><YAxis dataKey="name" type="category" width={125} tick={{fontSize:10}}/><Tooltip/><Bar dataKey="value" fill="#145EDB" name="SACs"/></BarChart></ResponsiveContainer></div></div>
-    </div>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4"><Ranking title="Categorias com maior volume" rows={topCategories}/><Ranking title="Produtos/modelos mais envolvidos" rows={topProducts}/><Ranking title="Clientes recorrentes" rows={recurring}/></div>
 
-    <div className="bg-white p-5 rounded-xl border shadow-sm"><h3 className="font-bold text-sm mb-3">Carga por responsável ou área</h3><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="bg-slate-50"><th className="p-2 text-left">Responsável / área</th><th className="p-2 text-right">Chamados</th><th className="p-2 text-right">Participação</th></tr></thead><tbody>{responsibleData.map(([name,count])=><tr key={name} className="border-t"><td className="p-2">{name}</td><td className="p-2 text-right font-bold">{count}</td><td className="p-2 text-right">{metrics.total?((count/metrics.total)*100).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></div><p className="text-xs text-slate-500 mt-3">Tempo médio de resolução: <strong>{metrics.averageDays===null?'Sem encerramentos':`${metrics.averageDays.toFixed(1)} dias`}</strong></p></div>
-    <BrandedDocumentFooter tenantId={tenant.id}/>
+    <section className="bg-white p-5 rounded-2xl border shadow-sm"><h2 className="font-black text-[#10233F] mb-3">Base analítica dos protocolos</h2><div className="overflow-x-auto max-h-[520px]"><table className="w-full text-xs"><thead className="bg-slate-50 sticky top-0"><tr><th className="text-left p-2">Protocolo</th><th className="text-left p-2">Abertura</th><th className="text-left p-2">Cliente</th><th className="text-left p-2">Categoria</th><th className="text-left p-2">Produto / modelo</th><th className="text-left p-2">Lote / série</th><th className="text-left p-2">Status</th></tr></thead><tbody>{filtered.map(ticket=><tr key={ticket.id} className="border-t align-top"><td className="p-2 font-mono font-bold text-[#145EDB]">{ticket.protocol}</td><td className="p-2 whitespace-nowrap">{new Date(ticket.createdAt).toLocaleDateString('pt-BR')}</td><td className="p-2">{ticket.customerName}</td><td className="p-2">{ticket.category}</td><td className="p-2">{(ticket.items||[]).map(item=><div key={item.id}><strong>{item.productName}</strong>{item.productModel&&` · ${item.productModel}`}{item.productDescription&&<p className="text-slate-500 max-w-xl whitespace-normal">{item.productDescription}</p>}</div>)}</td><td className="p-2">{(ticket.items||[]).map(item=><div key={item.id}>{item.lotNumber||item.serialNumber||'-'}</div>)}</td><td className="p-2 font-semibold">{ticket.status}</td></tr>)}</tbody></table></div></section>
   </div>;
 };
 
+const Ranking: React.FC<{title:string;rows:Array<[string,number]>}> = ({title,rows}) => <section className="bg-white p-5 rounded-2xl border shadow-sm"><h3 className="font-black text-[#10233F] mb-3">{title}</h3>{rows.length===0?<p className="text-xs text-slate-500">Sem dados no filtro atual.</p>:<div className="space-y-2">{rows.map(([name,count],index)=><div key={name} className="flex items-center gap-3"><span className="w-6 text-xs font-black text-slate-400">{index+1}.</span><div className="flex-1 min-w-0"><p className="text-xs font-semibold truncate">{name}</p><div className="h-1.5 rounded-full bg-slate-100 mt-1"><div className="h-full rounded-full bg-[#145EDB]" style={{width:`${Math.min(100,count/Math.max(1,rows[0][1])*100)}%`}}/></div></div><strong className="text-sm">{count}</strong></div>)}</div>}</section>;
