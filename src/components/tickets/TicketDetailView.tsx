@@ -1,1 +1,1 @@
-export { TicketDetailView } from './TicketDetailViewV46';
+export { TicketDetailView } from './TicketDetailViewV47';
