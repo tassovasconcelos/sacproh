@@ -42,30 +42,45 @@ export type UploadResult = {
 
 const safeFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
 
+const buildRegisteredDescription = (row: any): string | undefined => {
+  if (row.product_description?.trim()) return row.product_description.trim();
+  const master = row.product || {};
+  if (master.description?.trim()) return master.description.trim();
+  const parts = [
+    row.product_name || master.name,
+    row.product_model || master.model ? `Modelo ${row.product_model || master.model}` : '',
+    row.sku || master.code_sku ? `SKU ${row.sku || master.code_sku}` : '',
+    master.brand ? `Marca ${master.brand}` : '',
+    row.manufacturer_name || master.manufacturer_name ? `Fabricante ${row.manufacturer_name || master.manufacturer_name}` : '',
+    row.anvisa_register || master.anvisa_register ? `ANVISA ${row.anvisa_register || master.anvisa_register}` : ''
+  ].filter(Boolean);
+  return parts.length ? parts.join(' • ') : undefined;
+};
+
 export const sacV44Service = {
   async getProductSnapshots(ticketId: string): Promise<V44ProductSnapshot[]> {
     const { data, error } = await supabase
       .from('ticket_items')
-      .select('*')
+      .select('*, product:products(name,description,model,code_sku,brand,anvisa_register,manufacturer_name,importer_name,distributor_name)')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: true });
     if (error) throw new Error(`Não foi possível carregar os produtos completos: ${error.message}`);
     return (data || []).map((row: any) => ({
       id: row.id,
       productId: row.product_id || undefined,
-      productName: row.product_name,
-      productDescription: row.product_description || undefined,
-      productModel: row.product_model || undefined,
-      sku: row.sku || undefined,
+      productName: row.product_name || row.product?.name || 'Produto não identificado',
+      productDescription: buildRegisteredDescription(row),
+      productModel: row.product_model || row.product?.model || undefined,
+      sku: row.sku || row.product?.code_sku || undefined,
       quantity: Number(row.quantity || 0),
       serialNumber: row.serial_number || undefined,
       lotNumber: row.lot_number || undefined,
       manufacturingDate: row.manufacturing_date || undefined,
       expirationDate: row.expiration_date || undefined,
-      anvisaRegister: row.anvisa_register || undefined,
-      manufacturerName: row.manufacturer_name || undefined,
-      importerName: row.importer_name || undefined,
-      distributorName: row.distributor_name || undefined,
+      anvisaRegister: row.anvisa_register || row.product?.anvisa_register || undefined,
+      manufacturerName: row.manufacturer_name || row.product?.manufacturer_name || undefined,
+      importerName: row.importer_name || row.product?.importer_name || undefined,
+      distributorName: row.distributor_name || row.product?.distributor_name || undefined,
       retailerName: row.retailer_name || undefined
     }));
   },
