@@ -66,3 +66,5 @@ select
 from public.tickets t
 left join public.customers c on c.id=t.customer_id
 left join public.ticket_items ti on ti.ticket_id=t.id;
+
+alter view public.sac_protocol_report set (security_invoker = true);
