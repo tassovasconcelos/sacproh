@@ -1,0 +1,9 @@
+revoke execute on function public.create_product_master(jsonb) from anon;
+revoke execute on function public.set_product_master_active(uuid,boolean) from anon;
+revoke execute on function public.update_product_master(uuid,jsonb) from anon;
+revoke execute on function public.create_product_master(jsonb) from public;
+revoke execute on function public.set_product_master_active(uuid,boolean) from public;
+revoke execute on function public.update_product_master(uuid,jsonb) from public;
+grant execute on function public.create_product_master(jsonb) to authenticated;
+grant execute on function public.set_product_master_active(uuid,boolean) to authenticated;
+grant execute on function public.update_product_master(uuid,jsonb) to authenticated;
