@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { Product } from '../types';
 
 export type ProductMasterChanges = Partial<Pick<Product,
-  'name'|'description'|'model'|'codeSku'|'brand'|'anvisaRegister'|'supplierName'|'manufacturerName'|'importerName'|'distributorName'|'countryOrigin'>>;
+  'name'|'description'|'model'|'codeSku'|'brand'|'anvisaRegister'|'supplierName'|'manufacturerName'|'importerName'|'distributorName'|'countryOrigin'|'imageUrl'>>;
 export type ProductCreateInput = Pick<Product,'name'|'codeSku'> & ProductMasterChanges;
 
 const fromDb = (row:any):Product => ({
@@ -10,7 +10,7 @@ const fromDb = (row:any):Product => ({
   familyId:row.family_id||undefined,model:row.model||undefined,anvisaRegister:row.anvisa_register||undefined,
   supplierName:row.supplier_name||undefined,countryOrigin:row.country_origin||undefined,brand:row.brand||undefined,
   manufacturerName:row.manufacturer_name||undefined,importerName:row.importer_name||undefined,distributorName:row.distributor_name||undefined,
-  isActive:row.is_active!==false,createdAt:row.created_at||undefined,updatedAt:row.updated_at||undefined
+  imageUrl:row.image_url||undefined,isActive:row.is_active!==false,createdAt:row.created_at||undefined,updatedAt:row.updated_at||undefined
 });
 
 export const productMasterService = {
