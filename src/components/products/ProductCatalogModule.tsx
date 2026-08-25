@@ -15,10 +15,20 @@ const COLORS=['#ef4444','#f59e0b','#eab308','#22c55e','#3b82f6','#8b5cf6','#6474
 const normalize=(v?:string)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const clean=(v?:string)=>String(v||'').replace(/\s+/g,' ').trim();
 const genericDefect=(v?:string)=>{const n=normalize(v);return !n||['reclamacao de produto','reclamacao produto','produto','outros','outro','nao classificado','sem classificacao','defeito de produto'].includes(n)};
+const administrativeDefect=(v?:string)=>{
+  const n=normalize(v);
+  if(!n)return true;
+  const exact=['cpf','cnpj','cpf ou cnpj','cpf cnpj','documento','documento do cliente','identificacao','identificacao do cliente','cadastro','cadastro do cliente','cliente','consumidor','pessoa fisica','pessoa juridica','razao social','nome fantasia','telefone','email','e mail','endereco','cep'];
+  if(exact.includes(n))return true;
+  if(/\b(cpf|cnpj|documento|identificacao|cadastro|razao social|nome fantasia|telefone|email|e mail|endereco|cep)\b/.test(n))return true;
+  if(/^\d{11,14}$/.test(n.replace(/\s/g,'')))return true;
+  return false;
+};
+const technicalDefect=(v?:string)=>!genericDefect(v)&&!administrativeDefect(v);
 const defectFromTicket=(t:Ticket)=>{
-  const structured=[t.classification,t.subcategory,t.category].map(clean).find(v=>!genericDefect(v));
+  const structured=[t.classification,t.subcategory].map(clean).find(v=>technicalDefect(v));
   if(structured)return structured!;
-  const text=normalize([t.description,t.classification,t.subcategory].filter(Boolean).join(' '));
+  const text=normalize([t.description,t.classification,t.subcategory].filter(v=>v&&!administrativeDefect(String(v))).join(' '));
   const rules:[RegExp,string][]=[
     [/(freio|travamento|trava|nao freia|não freia)/,'Falha no sistema de freio'],
     [/(motor|eletric|energia|nao liga|não liga|acionamento|controle|painel)/,'Falha elétrica / motor'],
