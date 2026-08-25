@@ -2,10 +2,18 @@ export {};
 
 declare global {
   interface ObjectConstructor {
+    entries(o: Record<string, number>): Array<[string, number]>;
     entries<T>(o: Record<string, T>): Array<[string, T]>;
   }
 
+  interface SacProductMapValue {
+    id: string;
+    tenantId: string;
+    codeSku: string;
+    name: string;
+  }
+
   interface MapConstructor {
-    new <T extends object>(entries: Array<Array<string | T>>): Map<string, T>;
+    new (entries: Array<Array<string | SacProductMapValue>>): Map<string, SacProductMapValue>;
   }
 }
