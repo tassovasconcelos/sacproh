@@ -1,16 +1,15 @@
 alter function public.apply_ticket_sla() set search_path=public;
 alter function public.apply_lot_action_status() set search_path=public;
 
-revoke execute on function public.complete_ticket_action(uuid,text) from anon;
-revoke execute on function public.fill_ticket_item_product_snapshot() from anon;
-revoke execute on function public.log_ticket_action_event() from anon;
-revoke execute on function public.log_ticket_attachment_event() from anon;
-revoke execute on function public.log_ticket_cost_event() from anon;
-revoke execute on function public.register_ticket_evolution(uuid,text,text,text,text,timestamptz,text,text,boolean) from anon;
-revoke execute on function public.fill_ticket_item_product_snapshot() from authenticated;
-revoke execute on function public.log_ticket_action_event() from authenticated;
-revoke execute on function public.log_ticket_attachment_event() from authenticated;
-revoke execute on function public.log_ticket_cost_event() from authenticated;
+revoke all on function public.fill_ticket_item_product_snapshot() from public, anon, authenticated;
+revoke all on function public.log_ticket_action_event() from public, anon, authenticated;
+revoke all on function public.log_ticket_attachment_event() from public, anon, authenticated;
+revoke all on function public.log_ticket_cost_event() from public, anon, authenticated;
+
+revoke all on function public.register_ticket_evolution(uuid,text,text,text,text,timestamptz,text,text,boolean) from public, anon;
+grant execute on function public.register_ticket_evolution(uuid,text,text,text,text,timestamptz,text,text,boolean) to authenticated;
+revoke all on function public.complete_ticket_action(uuid,text) from public, anon;
+grant execute on function public.complete_ticket_action(uuid,text) to authenticated;
 
 revoke all on table public.products from anon;
 revoke insert, update, delete, truncate, references, trigger on table public.products from authenticated;
