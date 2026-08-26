@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Ticket, CheckSquare2, Wrench, Truck, UploadCloud,
   BookOpen, BarChart3, Users, Settings, History, PlusCircle, ArrowLeft, Lock, Unlock, Globe, ScanSearch, ClipboardCheck, ShieldAlert, PackageSearch, X
 } from 'lucide-react';
-import {ProductCatalogModule} from '../products/ProductCatalogModule';
+import {ProductWorkspace} from '../products/ProductWorkspace';
 
 export type NavView =
   | 'dashboard'
@@ -71,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <nav className="space-y-1">
           <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Operacional SAC</p>
           {opMenuItems.slice(0,2).map(item=>{const active=currentView===item.id&&!showProducts;return <button key={item.id} onClick={()=>{setShowProducts(false);onSelectView(item.id)}} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${active?'bg-[#145EDB] text-white shadow-sm font-bold':'text-slate-300 hover:bg-slate-800/80 hover:text-white'}`}><div className="flex items-center space-x-3">{item.icon}<span>{item.label}</span></div>{item.badge!==undefined&&item.badge>0&&<span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${active?'bg-white text-[#145EDB]':'bg-[#FF8500] text-white'}`}>{item.badge}</span>}</button>})}
-          {productVisible&&<button onClick={()=>setShowProducts(true)} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all border ${showProducts?'bg-[#145EDB] text-white border-[#145EDB] shadow-sm':'bg-[#102E55] text-white border-slate-600 hover:bg-[#145EDB]'}`}><div className="flex items-center space-x-3"><PackageSearch className="w-4 h-4 text-[#FFB14A]"/><span>Produtos & Inteligência</span></div><span className="text-[9px] px-1.5 py-0.5 rounded bg-[#FF8500] text-white">NOVO</span></button>}
+          {productVisible&&<button onClick={()=>setShowProducts(true)} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all border ${showProducts?'bg-[#145EDB] text-white border-[#145EDB] shadow-sm':'bg-[#102E55] text-white border-slate-600 hover:bg-[#145EDB]'}`}><div className="flex items-center space-x-3"><PackageSearch className="w-4 h-4 text-[#FFB14A]"/><span>Produtos & Inteligência</span></div><span className="text-[9px] px-1.5 py-0.5 rounded bg-[#FF8500] text-white">V4.10</span></button>}
           {opMenuItems.slice(2).map(item=>{const active=currentView===item.id&&!showProducts;return <button key={item.id} onClick={()=>{setShowProducts(false);onSelectView(item.id)}} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${active?'bg-[#145EDB] text-white shadow-sm font-bold':'text-slate-300 hover:bg-slate-800/80 hover:text-white'}`}><div className="flex items-center space-x-3">{item.icon}<span>{item.label}</span></div>{item.badge!==undefined&&item.badge>0&&<span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${active?'bg-white text-[#145EDB]':'bg-[#FF8500] text-white'}`}>{item.badge}</span>}</button>})}
         </nav>
         <nav className="space-y-1 pt-2 border-t border-slate-800">
@@ -81,6 +81,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
       <div className="p-3 mt-3 bg-slate-800/60 rounded-xl border border-slate-700/60 text-center"><p className="text-[11px] font-bold text-white">SACPROH · Procirúrgica</p><p className="text-[10px] text-slate-400 mt-0.5">Gestão integrada de atendimento</p></div>
     </aside>
-    {showProducts&&<div className="fixed z-[60] left-64 top-16 right-0 bottom-0 bg-[#F7F9FC] overflow-y-auto"><div className="max-w-7xl mx-auto p-4 md:p-6"><div className="flex justify-end mb-2"><button onClick={()=>setShowProducts(false)} className="p-2 rounded-lg border bg-white hover:bg-slate-50 text-slate-600" title="Fechar módulo"><X className="w-4 h-4"/></button></div><ProductCatalogModule currentUserRole={currentUserRole}/></div></div>}
+    {showProducts&&<div className="fixed z-[60] left-64 top-16 right-0 bottom-0 bg-[#F7F9FC] overflow-y-auto"><div className="max-w-7xl mx-auto p-4 md:p-6"><div className="flex justify-end mb-2"><button onClick={()=>setShowProducts(false)} className="p-2 rounded-lg border bg-white hover:bg-slate-50 text-slate-600" title="Fechar módulo"><X className="w-4 h-4"/></button></div><ProductWorkspace currentUserRole={currentUserRole}/></div></div>}
   </>;
 };
