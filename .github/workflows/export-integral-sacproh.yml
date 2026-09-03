@@ -7,18 +7,18 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 env:
-  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-  PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
   MAIN_SHA: bafc71f5cd6315e5b81a0c6cc9c8b1d664ca995b
+  PROJECT_REF: ysfiyonceduhmdjgtghl
+  BROKER_URL: https://ysfiyonceduhmdjgtghl.supabase.co/functions/v1/sacproh-backup-broker
+  OIDC_AUDIENCE: sacproh-integral-backup-2026-09-03
 
 jobs:
   export:
     name: Gerar backup integral
     runs-on: ubuntu-latest
-    environment: production
     timeout-minutes: 45
     steps:
       - name: Baixar repositório com histórico
@@ -26,121 +26,177 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configurar Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Validar credenciais protegidas
+      - name: Preparar diretórios
         shell: bash
         run: |
           set -euo pipefail
-          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF; do
-            if [ -z "${!name:-}" ]; then
-              echo "Secret obrigatório ausente: $name"
-              exit 1
-            fi
-          done
-
-      - name: Preparar diretórios e vincular projeto
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p export/database export/storage export/repository/source export/supabase/functions export/manifest
-          supabase link --project-ref "$PROJECT_REF"
-          supabase --version > export/manifest/supabase-cli-version.txt
+          mkdir -p export/database/json export/database/catalog export/storage export/repository/source export/manifest export/restore
           printf '%s\n' "$PROJECT_REF" > export/manifest/project-ref.txt
           printf '%s\n' "$MAIN_SHA" > export/repository/MAIN_SHA.txt
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > export/manifest/export-started-at.txt
 
-      - name: Exportar banco completo
+      - name: Obter identidade OIDC efêmera do GitHub
         shell: bash
         run: |
           set -euo pipefail
-          supabase db dump --linked -f export/database/roles.sql --role-only
-          supabase db dump --linked -f export/database/schema.sql
-          supabase db dump --linked -f export/database/data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
-          supabase db dump --linked --schema auth -f export/database/auth-schema.sql
-          supabase db dump --linked --schema auth -f export/database/auth-data.sql --use-copy --data-only
-          supabase db dump --linked --schema storage -f export/database/storage-schema.sql
-          supabase db dump --linked --schema storage -f export/database/storage-data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
-          cat export/database/roles.sql export/database/schema.sql export/database/data.sql > export/database/full-logical-backup.sql
+          response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          printf '%s' "$response" | jq -r '.value' > "$RUNNER_TEMP/sacproh-oidc-token"
+          test -s "$RUNNER_TEMP/sacproh-oidc-token"
+          chmod 600 "$RUNNER_TEMP/sacproh-oidc-token"
 
-      - name: Registrar migrações remotas
+      - name: Exportar todas as tabelas e catálogo estrutural
         shell: bash
         run: |
           set -euo pipefail
-          supabase migration list --linked > export/manifest/migration-list.txt
+          python3 - <<'PY'
+          import json, os, pathlib, urllib.request
+
+          broker = os.environ['BROKER_URL']
+          token = pathlib.Path(os.environ['RUNNER_TEMP'], 'sacproh-oidc-token').read_text().strip()
+          root = pathlib.Path('export/database')
+          root.mkdir(parents=True, exist_ok=True)
+
+          def call(payload):
+              body = json.dumps(payload).encode('utf-8')
+              req = urllib.request.Request(
+                  broker, data=body, method='POST',
+                  headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+              )
+              with urllib.request.urlopen(req, timeout=120) as resp:
+                  return json.loads(resp.read().decode('utf-8'))
+
+          manifest = call({'action': 'manifest'})
+          (pathlib.Path('export/manifest') / 'database-manifest.json').write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8'
+          )
+
+          validation = []
+          total_rows = 0
+          for item in manifest['tables']:
+              schema = item['schema']
+              table = item['table']
+              expected = int(item['rowCount'])
+              rows = []
+              offset = 0
+              while offset < expected:
+                  page = call({'action': 'table', 'schema': schema, 'table': table, 'offset': offset, 'limit': 500})
+                  batch = page.get('rows', [])
+                  if not batch and offset < expected:
+                      raise RuntimeError(f'Export interrupted at {schema}.{table}: {offset}/{expected}')
+                  rows.extend(batch)
+                  offset += len(batch)
+              outdir = root / 'json' / schema
+              outdir.mkdir(parents=True, exist_ok=True)
+              (outdir / f'{table}.json').write_text(
+                  json.dumps(rows, ensure_ascii=False, indent=2, default=str), encoding='utf-8'
+              )
+              actual = len(rows)
+              if actual != expected:
+                  raise RuntimeError(f'Row count mismatch {schema}.{table}: expected {expected}, got {actual}')
+              total_rows += actual
+              validation.append({'schema': schema, 'table': table, 'expected': expected, 'exported': actual, 'ok': True})
+
+          catalog = call({'action': 'catalog'})
+          (root / 'catalog' / 'database-catalog.json').write_text(
+              json.dumps(catalog, ensure_ascii=False, indent=2, default=str), encoding='utf-8'
+          )
+          pathlib.Path('export/manifest/database-validation.json').write_text(
+              json.dumps({'tableCount': len(validation), 'totalRows': total_rows, 'tables': validation}, ensure_ascii=False, indent=2),
+              encoding='utf-8'
+          )
+          print(f'Validated {len(validation)} tables and {total_rows} rows')
+          PY
+
+      - name: Exportar objetos físicos do Storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, urllib.request
+
+          broker = os.environ['BROKER_URL']
+          token = pathlib.Path(os.environ['RUNNER_TEMP'], 'sacproh-oidc-token').read_text().strip()
+          req = urllib.request.Request(
+              broker, data=json.dumps({'action':'storage'}).encode(), method='POST',
+              headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+          )
+          with urllib.request.urlopen(req, timeout=120) as resp:
+              payload = json.loads(resp.read().decode())
+
+          objects = payload.get('objects', [])
+          safe_manifest = []
+          total_bytes = 0
+          for idx, obj in enumerate(objects, 1):
+              bucket, path, url = obj['bucket'], obj['path'], obj['signedUrl']
+              target = pathlib.Path('export/storage') / bucket / pathlib.PurePosixPath(path)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              with urllib.request.urlopen(url, timeout=300) as src, open(target, 'wb') as dst:
+                  while True:
+                      chunk = src.read(1024 * 1024)
+                      if not chunk: break
+                      dst.write(chunk)
+              size = target.stat().st_size
+              total_bytes += size
+              safe_manifest.append({'bucket': bucket, 'path': path, 'size': size})
+              print(f'[{idx}/{len(objects)}] {path} ({size} bytes)')
+
+          expected_count = 65
+          expected_bytes = 116546528
+          if len(objects) != expected_count:
+              raise RuntimeError(f'Storage object count mismatch: expected {expected_count}, got {len(objects)}')
+          if total_bytes != expected_bytes:
+              raise RuntimeError(f'Storage size mismatch: expected {expected_bytes}, got {total_bytes}')
+
+          pathlib.Path('export/manifest/storage-files.json').write_text(
+              json.dumps({'objectCount': len(objects), 'totalBytes': total_bytes, 'objects': safe_manifest}, ensure_ascii=False, indent=2),
+              encoding='utf-8'
+          )
+          print(f'Storage validated: {len(objects)} objects, {total_bytes} bytes')
+          PY
 
       - name: Exportar código da main e histórico Git
         shell: bash
         run: |
           set -euo pipefail
+          git cat-file -e "$MAIN_SHA^{commit}"
           git archive "$MAIN_SHA" | tar -x -C export/repository/source
           git bundle create export/repository/sacproh-complete-history.bundle --all
           git log --all --date=iso-strict --pretty=format:'%H|%P|%an|%ae|%ad|%s' > export/repository/git-history.txt
-          git status --porcelain=v1 > export/repository/export-branch-status.txt
+          git ls-tree -r --long "$MAIN_SHA" > export/repository/main-tree.txt
 
-      - name: Exportar Edge Functions implantadas
-        shell: bash
-        run: |
-          set -u
-          work="$(mktemp -d)"
-          cd "$work"
-          supabase init >/dev/null 2>&1 || true
-          status=0
-          for fn in gemini-proxy invite-user mercadopago-checkout mercadopago-webhook request-trial manage-trials; do
-            echo "Baixando $fn"
-            if ! supabase functions download "$fn" --project-ref "$PROJECT_REF"; then
-              echo "$fn" >> "$GITHUB_WORKSPACE/export/manifest/edge-functions-download-failures.txt"
-              status=1
-            fi
-          done
-          if [ -d supabase/functions ]; then
-            cp -a supabase/functions/. "$GITHUB_WORKSPACE/export/supabase/functions/"
-          fi
-          cd "$GITHUB_WORKSPACE"
-          supabase functions list --project-ref "$PROJECT_REF" -o json > export/manifest/edge-functions.json || true
-          exit 0
-
-      - name: Exportar arquivos físicos do Storage
-        shell: bash
-        run: |
-          set -u
-          : > export/manifest/storage-download-status.txt
-          for bucket in sac-attachments risk-audit-documents tenant-branding; do
-            mkdir -p "export/storage/$bucket"
-            echo "[$bucket] iniciando" | tee -a export/manifest/storage-download-status.txt
-            if supabase storage cp "ss:///$bucket" "export/storage/$bucket" -r --experimental --linked; then
-              echo "[$bucket] OK" | tee -a export/manifest/storage-download-status.txt
-            else
-              echo "[$bucket] FALHOU" | tee -a export/manifest/storage-download-status.txt
-            fi
-          done
-          find export/storage -type f -printf '%P\t%s\n' | sort > export/manifest/storage-files.tsv
-
-      - name: Criar documentação e checksums
+      - name: Criar guia de restauração e checksums
         shell: bash
         run: |
           set -euo pipefail
           cat > export/README_BACKUP.txt <<'EOF'
-          SACPROH - EXPORTAÇÃO INTEGRAL
-          Gerada automaticamente em ambiente isolado de backup.
+          SACPROH - EXPORTAÇÃO INTEGRAL LÓGICA E DE ARQUIVOS
 
-          Conteúdo:
-          - database/: roles, schema, dados e cópias explícitas de auth/storage
-          - repository/source/: snapshot exato da main no SHA registrado
-          - repository/sacproh-complete-history.bundle: histórico Git transportável
-          - supabase/functions/: Edge Functions baixadas do projeto implantado
-          - storage/: objetos físicos dos buckets que a CLI conseguiu baixar
-          - manifest/: versões, migrações e validações da exportação
+          Este pacote contém:
+          1. database/json/: conteúdo real de todas as tabelas dos schemas public, auth, storage e supabase_migrations.
+          2. database/catalog/: catálogo estrutural com colunas, índices, constraints, funções, triggers, policies, views e extensões.
+          3. storage/: todos os objetos físicos encontrados no bucket sac-attachments, preservando os caminhos originais.
+          4. repository/source/: snapshot exato da branch main no SHA registrado.
+          5. repository/sacproh-complete-history.bundle: histórico Git transportável.
+          6. manifest/: contagens e validações automáticas do banco e Storage.
 
-          A credencial do banco e os secrets do Supabase NÃO são incluídos neste pacote.
-          Verifique manifest/storage-download-status.txt antes de considerar o Storage completo.
+          Nenhuma senha, chave administrativa, URL assinada ou token OIDC é incluído neste artifact.
           EOF
+          cat > export/restore/README_RESTORE.txt <<'EOF'
+          RESTAURAÇÃO
+          - Código: git clone sacproh-complete-history.bundle sacproh-restored
+          - Estrutura Supabase: use as migrations em repository/source/supabase/migrations como baseline de reconstrução e valide contra database/catalog/database-catalog.json.
+          - Dados: os arquivos database/json/<schema>/<table>.json contêm os registros completos da fotografia exportada.
+          - Auth: dados das tabelas do schema auth estão incluídos no mesmo formato.
+          - Storage: recrie os buckets conforme database/json/storage/buckets.json e reenvie os objetos de storage/ preservando bucket e path.
+          - Antes de colocar em produção, valide RLS, policies, Edge Functions, secrets e URLs do novo ambiente.
+          EOF
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > export/manifest/export-finished-at.txt
           find export -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > export/manifest/SHA256SUMS.txt
           du -ah export | sort -h > export/manifest/file-sizes.txt
 
-      - name: Publicar artifact privado do backup
+      - name: Publicar artifact do backup
         uses: actions/upload-artifact@v4
         with:
           name: SACPROH-INTEGRAL-2026-09-03
