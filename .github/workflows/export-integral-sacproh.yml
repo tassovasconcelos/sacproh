@@ -1,0 +1,150 @@
+name: SACPROH Integral Export
+
+on:
+  push:
+    branches:
+      - backup/sacproh-integral-2026-09-03
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+  PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+  MAIN_SHA: bafc71f5cd6315e5b81a0c6cc9c8b1d664ca995b
+
+jobs:
+  export:
+    name: Gerar backup integral
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    steps:
+      - name: Baixar repositório com histórico
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validar credenciais protegidas
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF; do
+            if [ -z "${!name:-}" ]; then
+              echo "Secret obrigatório ausente: $name"
+              exit 1
+            fi
+          done
+
+      - name: Preparar diretórios e vincular projeto
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export/database export/storage export/repository/source export/supabase/functions export/manifest
+          supabase link --project-ref "$PROJECT_REF"
+          supabase --version > export/manifest/supabase-cli-version.txt
+          printf '%s\n' "$PROJECT_REF" > export/manifest/project-ref.txt
+          printf '%s\n' "$MAIN_SHA" > export/repository/MAIN_SHA.txt
+
+      - name: Exportar banco completo
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db dump --linked -f export/database/roles.sql --role-only
+          supabase db dump --linked -f export/database/schema.sql
+          supabase db dump --linked -f export/database/data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+          supabase db dump --linked --schema auth -f export/database/auth-schema.sql
+          supabase db dump --linked --schema auth -f export/database/auth-data.sql --use-copy --data-only
+          supabase db dump --linked --schema storage -f export/database/storage-schema.sql
+          supabase db dump --linked --schema storage -f export/database/storage-data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+          cat export/database/roles.sql export/database/schema.sql export/database/data.sql > export/database/full-logical-backup.sql
+
+      - name: Registrar migrações remotas
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase migration list --linked > export/manifest/migration-list.txt
+
+      - name: Exportar código da main e histórico Git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive "$MAIN_SHA" | tar -x -C export/repository/source
+          git bundle create export/repository/sacproh-complete-history.bundle --all
+          git log --all --date=iso-strict --pretty=format:'%H|%P|%an|%ae|%ad|%s' > export/repository/git-history.txt
+          git status --porcelain=v1 > export/repository/export-branch-status.txt
+
+      - name: Exportar Edge Functions implantadas
+        shell: bash
+        run: |
+          set -u
+          work="$(mktemp -d)"
+          cd "$work"
+          supabase init >/dev/null 2>&1 || true
+          status=0
+          for fn in gemini-proxy invite-user mercadopago-checkout mercadopago-webhook request-trial manage-trials; do
+            echo "Baixando $fn"
+            if ! supabase functions download "$fn" --project-ref "$PROJECT_REF"; then
+              echo "$fn" >> "$GITHUB_WORKSPACE/export/manifest/edge-functions-download-failures.txt"
+              status=1
+            fi
+          done
+          if [ -d supabase/functions ]; then
+            cp -a supabase/functions/. "$GITHUB_WORKSPACE/export/supabase/functions/"
+          fi
+          cd "$GITHUB_WORKSPACE"
+          supabase functions list --project-ref "$PROJECT_REF" -o json > export/manifest/edge-functions.json || true
+          exit 0
+
+      - name: Exportar arquivos físicos do Storage
+        shell: bash
+        run: |
+          set -u
+          : > export/manifest/storage-download-status.txt
+          for bucket in sac-attachments risk-audit-documents tenant-branding; do
+            mkdir -p "export/storage/$bucket"
+            echo "[$bucket] iniciando" | tee -a export/manifest/storage-download-status.txt
+            if supabase storage cp "ss:///$bucket" "export/storage/$bucket" -r --experimental --linked; then
+              echo "[$bucket] OK" | tee -a export/manifest/storage-download-status.txt
+            else
+              echo "[$bucket] FALHOU" | tee -a export/manifest/storage-download-status.txt
+            fi
+          done
+          find export/storage -type f -printf '%P\t%s\n' | sort > export/manifest/storage-files.tsv
+
+      - name: Criar documentação e checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > export/README_BACKUP.txt <<'EOF'
+          SACPROH - EXPORTAÇÃO INTEGRAL
+          Gerada automaticamente em ambiente isolado de backup.
+
+          Conteúdo:
+          - database/: roles, schema, dados e cópias explícitas de auth/storage
+          - repository/source/: snapshot exato da main no SHA registrado
+          - repository/sacproh-complete-history.bundle: histórico Git transportável
+          - supabase/functions/: Edge Functions baixadas do projeto implantado
+          - storage/: objetos físicos dos buckets que a CLI conseguiu baixar
+          - manifest/: versões, migrações e validações da exportação
+
+          A credencial do banco e os secrets do Supabase NÃO são incluídos neste pacote.
+          Verifique manifest/storage-download-status.txt antes de considerar o Storage completo.
+          EOF
+          find export -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > export/manifest/SHA256SUMS.txt
+          du -ah export | sort -h > export/manifest/file-sizes.txt
+
+      - name: Publicar artifact privado do backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: SACPROH-INTEGRAL-2026-09-03
+          path: export/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
