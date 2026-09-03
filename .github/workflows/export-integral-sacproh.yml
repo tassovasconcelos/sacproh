@@ -42,41 +42,35 @@ jobs:
           test -s "$RUNNER_TEMP/sacproh-oidc-token"
           chmod 600 "$RUNNER_TEMP/sacproh-oidc-token"
 
-      - name: Exportar banco completo por schema
+      - name: Exportar snapshot transacional do banco
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json, os, pathlib, urllib.request, urllib.error, time
-          broker=os.environ['BROKER_URL']
-          token=pathlib.Path(os.environ['RUNNER_TEMP'],'sacproh-oidc-token').read_text().strip()
-          root=pathlib.Path('export/database')
-          def call(payload, retries=3):
+          broker=os.environ['BROKER_URL']; token=pathlib.Path(os.environ['RUNNER_TEMP'],'sacproh-oidc-token').read_text().strip()
+          def call(payload,retries=3):
               body=json.dumps(payload).encode()
               for attempt in range(retries):
                   req=urllib.request.Request(broker,data=body,method='POST',headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'})
                   try:
-                      with urllib.request.urlopen(req,timeout=180) as resp: return json.loads(resp.read().decode())
+                      with urllib.request.urlopen(req,timeout=300) as resp:return json.loads(resp.read().decode())
                   except urllib.error.HTTPError as e:
                       detail=e.read().decode(errors='replace')
-                      if attempt+1==retries: raise RuntimeError(f"broker {payload.get('action')} failed HTTP {e.code}: {detail[:500]}")
+                      if attempt+1==retries:raise RuntimeError(f'broker failed HTTP {e.code}: {detail[:500]}')
                       time.sleep(2*(attempt+1))
-          manifest=call({'action':'manifest'})
-          pathlib.Path('export/manifest/database-manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
-          expected={(x['schema'],x['table']):int(x['rowCount']) for x in manifest['tables']}
-          validations=[]; total=0
-          for schema in ['auth','public','storage','supabase_migrations']:
-              print('Exportando schema',schema,flush=True)
-              snap=call({'action':'schema','schema':schema})
-              outdir=root/'json'/schema; outdir.mkdir(parents=True,exist_ok=True)
-              for table,rows in snap['data'].items():
+          snap=call({'action':'snapshot'})
+          root=pathlib.Path('export/database'); total=0; validations=[]
+          for schema,tables in snap['schemas'].items():
+              outdir=root/'json'/schema;outdir.mkdir(parents=True,exist_ok=True)
+              for table,rows in tables.items():
                   (outdir/f'{table}.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
-                  actual=len(rows); exp=expected.get((schema,table),actual)
-                  if actual!=exp: raise RuntimeError(f'Row count mismatch {schema}.{table}: manifest={exp}, snapshot={actual}')
-                  validations.append({'schema':schema,'table':table,'expected':exp,'exported':actual,'ok':True}); total+=actual
-          catalog=call({'action':'catalog'})
-          (root/'catalog'/'database-catalog.json').write_text(json.dumps(catalog,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
-          pathlib.Path('export/manifest/database-validation.json').write_text(json.dumps({'tableCount':len(validations),'totalRows':total,'tables':validations},ensure_ascii=False,indent=2),encoding='utf-8')
-          print(f'Banco validado: {len(validations)} tabelas, {total} linhas',flush=True)
+                  expected=int(snap['counts'][schema][table]);actual=len(rows)
+                  if actual!=expected:raise RuntimeError(f'count mismatch {schema}.{table}: {expected}/{actual}')
+                  validations.append({'schema':schema,'table':table,'exported':actual,'ok':True});total+=actual
+          (root/'catalog'/'database-catalog.json').write_text(json.dumps(snap['catalog'],ensure_ascii=False,indent=2,default=str),encoding='utf-8')
+          pathlib.Path('export/manifest/database-validation.json').write_text(json.dumps({'snapshotAt':snap['snapshotAt'],'tableCount':len(validations),'totalRows':total,'tables':validations},ensure_ascii=False,indent=2),encoding='utf-8')
+          pathlib.Path('export/manifest/database-snapshot-at.txt').write_text(str(snap['snapshotAt']),encoding='utf-8')
+          print(f'Banco validado: {len(validations)} tabelas, {total} linhas, snapshot {snap["snapshotAt"]}',flush=True)
           PY
 
       - name: Exportar objetos físicos do Storage
@@ -84,23 +78,23 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json, os, pathlib, urllib.request
-          broker=os.environ['BROKER_URL']; token=pathlib.Path(os.environ['RUNNER_TEMP'],'sacproh-oidc-token').read_text().strip()
+          broker=os.environ['BROKER_URL'];token=pathlib.Path(os.environ['RUNNER_TEMP'],'sacproh-oidc-token').read_text().strip()
           req=urllib.request.Request(broker,data=json.dumps({'action':'storage'}).encode(),method='POST',headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'})
-          with urllib.request.urlopen(req,timeout=180) as resp: payload=json.loads(resp.read().decode())
-          meta={(x['bucket_id'],x['name']):int(x['size'] or 0) for x in payload.get('metadata',[])}
-          objects=payload.get('objects',[]); exported=[]; total=0
-          if len(objects)!=len(meta): raise RuntimeError(f'Storage count mismatch metadata={len(meta)} signed={len(objects)}')
+          with urllib.request.urlopen(req,timeout=180) as resp:payload=json.loads(resp.read().decode())
+          meta={(x['bucket_id'],x['name']):int(x['size'] or 0) for x in payload.get('metadata',[])};objects=payload.get('objects',[])
+          if len(objects)!=len(meta):raise RuntimeError(f'Storage count mismatch metadata={len(meta)} signed={len(objects)}')
+          exported=[];total=0
           for idx,obj in enumerate(objects,1):
-              bucket,path,url=obj['bucket'],obj['path'],obj['signedUrl']; target=pathlib.Path('export/storage')/bucket/pathlib.PurePosixPath(path); target.parent.mkdir(parents=True,exist_ok=True)
+              bucket,path,url=obj['bucket'],obj['path'],obj['signedUrl'];target=pathlib.Path('export/storage')/bucket/pathlib.PurePosixPath(path);target.parent.mkdir(parents=True,exist_ok=True)
               with urllib.request.urlopen(url,timeout=300) as src,open(target,'wb') as dst:
                   while True:
                       chunk=src.read(1024*1024)
-                      if not chunk: break
+                      if not chunk:break
                       dst.write(chunk)
-              size=target.stat().st_size; expected=meta[(bucket,path)]
-              if size!=expected: raise RuntimeError(f'Size mismatch {bucket}/{path}: expected={expected} got={size}')
-              total+=size; exported.append({'bucket':bucket,'path':path,'size':size}); print(f'[{idx}/{len(objects)}] {path}',flush=True)
-          pathlib.Path('export/manifest/storage-files.json').write_text(json.dumps({'objectCount':len(exported),'totalBytes':total,'objects':exported},ensure_ascii=False,indent=2),encoding='utf-8')
+              size=target.stat().st_size;expected=meta[(bucket,path)]
+              if size!=expected:raise RuntimeError(f'Size mismatch {bucket}/{path}: {expected}/{size}')
+              total+=size;exported.append({'bucket':bucket,'path':path,'size':size});print(f'[{idx}/{len(objects)}] {path}',flush=True)
+          pathlib.Path('export/manifest/storage-files.json').write_text(json.dumps({'snapshotAt':payload['snapshotAt'],'objectCount':len(exported),'totalBytes':total,'objects':exported},ensure_ascii=False,indent=2),encoding='utf-8')
           print(f'Storage validado: {len(exported)} objetos, {total} bytes',flush=True)
           PY
 
@@ -118,14 +112,14 @@ jobs:
           set -euo pipefail
           cat > export/README_BACKUP.txt <<'EOF'
           SACPROH - EXPORTAÇÃO INTEGRAL LÓGICA E DE ARQUIVOS
-          database/json contém todas as linhas exportadas dos schemas public, auth, storage e supabase_migrations.
-          database/catalog contém estrutura, índices, constraints, funções, triggers, policies, views e extensões.
-          storage contém os objetos físicos preservando bucket e caminho.
+          O banco foi exportado em snapshot transacional REPEATABLE READ, incluindo public, auth, storage e supabase_migrations.
+          database/catalog preserva estrutura lógica: colunas, índices, constraints, funções, triggers, policies, views e extensões.
+          storage contém todos os objetos físicos presentes na fotografia do Storage, preservando bucket e caminho.
           repository/source contém snapshot exato da main; repository/sacproh-complete-history.bundle contém o histórico Git transportável.
-          Nenhuma senha, token OIDC, chave administrativa ou URL assinada é incluída no artifact.
+          Nenhuma senha, token OIDC, chave administrativa ou URL assinada é incluída neste artifact.
           EOF
           cat > export/restore/README_RESTORE.txt <<'EOF'
-          RESTAURAÇÃO: use o Git bundle para recuperar histórico; migrations do snapshot como baseline; database/catalog para validar estrutura; database/json para restaurar registros; e storage/ para reenviar objetos preservando bucket/path. Antes de produção, valide Auth, RLS, policies, Edge Functions, secrets e URLs do novo ambiente.
+          RESTAURAÇÃO: recupere o código pelo Git bundle; use as migrations do snapshot e database/catalog para reconstruir/validar estrutura; restaure database/json respeitando dependências; recrie buckets a partir de storage.buckets e reenvie storage/ preservando caminhos. Depois configure Edge Functions, secrets, Auth URLs, RLS/policies e integrações no novo ambiente.
           EOF
           date -u +'%Y-%m-%dT%H:%M:%SZ' > export/manifest/export-finished-at.txt
           find export -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > export/manifest/SHA256SUMS.txt
