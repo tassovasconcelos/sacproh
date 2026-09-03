@@ -12,6 +12,7 @@ permissions:
 env:
   MAIN_SHA: bafc71f5cd6315e5b81a0c6cc9c8b1d664ca995b
   PROJECT_REF: ysfiyonceduhmdjgtghl
+  BROKER_VERSION: 4
   BROKER_URL: https://ysfiyonceduhmdjgtghl.supabase.co/functions/v1/sacproh-backup-broker
   OIDC_AUDIENCE: sacproh-integral-backup-2026-09-03
 
@@ -32,6 +33,7 @@ jobs:
           mkdir -p export/database/json export/database/catalog export/storage export/repository/source export/manifest export/restore
           printf '%s\n' "$PROJECT_REF" > export/manifest/project-ref.txt
           printf '%s\n' "$MAIN_SHA" > export/repository/MAIN_SHA.txt
+          printf '%s\n' "$BROKER_VERSION" > export/manifest/export-broker-version.txt
           date -u +'%Y-%m-%dT%H:%M:%SZ' > export/manifest/export-started-at.txt
 
       - name: Obter identidade OIDC efêmera do GitHub
