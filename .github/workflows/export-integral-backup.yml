@@ -1,0 +1,226 @@
+name: Exportar backup integral SACPROH
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/export-integral-backup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+jobs:
+  backup:
+    name: Backup integral
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+
+    steps:
+      - name: Baixar repositório com histórico completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validar segredos protegidos
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in PROJECT_REF SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "Secret obrigatório ausente: $name"
+              exit 1
+            fi
+          done
+
+      - name: Preparar estrutura do backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p backup/{database,github,storage,metadata,supabase}
+          printf '%s\n' "SACPROH integral backup" > backup/README.txt
+          printf '%s\n' "Gerado em UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> backup/README.txt
+          printf '%s\n' "Projeto Supabase: $PROJECT_REF" >> backup/README.txt
+          printf '%s\n' "Segredos de runtime não são exportados; apenas nomes/inventário quando disponível." >> backup/README.txt
+
+      - name: Vincular projeto Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$PROJECT_REF"
+
+      - name: Exportar banco PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db dump --linked --file backup/database/schema.sql --schema public,auth,storage
+          supabase db dump --linked --file backup/database/data.sql --schema public,auth,storage --data-only --use-copy
+          supabase db dump --linked --file backup/database/roles.sql --role-only
+          supabase migration list --linked > backup/database/migrations-linked.txt
+
+      - name: Exportar inventário Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions list --project-ref "$PROJECT_REF" --output json > backup/supabase/functions.json || true
+          supabase secrets list --project-ref "$PROJECT_REF" --output json > backup/supabase/secrets-inventory.json || true
+          cp -R supabase backup/github/supabase-source 2>/dev/null || true
+
+      - name: Exportar repositório e histórico Git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git bundle create backup/github/sacproh-full-history.bundle --all
+          git archive --format=zip --output=backup/github/sacproh-main.zip HEAD
+          git rev-parse HEAD > backup/github/commit.txt
+          git log --all --date=iso-strict --pretty=format:'%H%x09%ad%x09%an%x09%s' > backup/github/history.tsv
+
+      - name: Obter chave de serviço temporária para leitura do Storage
+        id: api_key
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/api-keys")"
+          service_role="$(printf '%s' "$response" | jq -r '[.[] | select(.name=="service_role" or .id=="service_role") | .api_key][0] // empty')"
+          if [ -z "$service_role" ]; then
+            echo "Não foi possível obter a service_role pelo Management API."
+            exit 1
+          fi
+          echo "::add-mask::$service_role"
+          echo "service_role=$service_role" >> "$GITHUB_OUTPUT"
+
+      - name: Baixar todos os objetos físicos do Storage
+        shell: bash
+        env:
+          SERVICE_ROLE: ${{ steps.api_key.outputs.service_role }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, urllib.request, urllib.parse
+
+          project = os.environ['PROJECT_REF']
+          key = os.environ['SERVICE_ROLE']
+          base = f'https://{project}.supabase.co/storage/v1'
+          root = pathlib.Path('backup/storage')
+          root.mkdir(parents=True, exist_ok=True)
+          headers = {'Authorization': f'Bearer {key}', 'apikey': key, 'Content-Type': 'application/json'}
+
+          def request_json(url, method='GET', body=None):
+              data = None if body is None else json.dumps(body).encode()
+              req = urllib.request.Request(url, data=data, headers=headers, method=method)
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return json.loads(r.read().decode())
+
+          buckets = request_json(base + '/bucket')
+          (root / '_buckets.json').write_text(json.dumps(buckets, indent=2, ensure_ascii=False), encoding='utf-8')
+          manifest = []
+
+          def list_prefix(bucket, prefix=''):
+              offset = 0
+              while True:
+                  rows = request_json(
+                      base + '/object/list/' + urllib.parse.quote(bucket, safe=''),
+                      method='POST',
+                      body={'prefix': prefix, 'limit': 1000, 'offset': offset, 'sortBy': {'column':'name','order':'asc'}},
+                  )
+                  if not rows:
+                      break
+                  for row in rows:
+                      name = row.get('name') or ''
+                      full = f'{prefix}/{name}' if prefix else name
+                      if row.get('id') is None:
+                          yield from list_prefix(bucket, full)
+                      else:
+                          yield full, row
+                  if len(rows) < 1000:
+                      break
+                  offset += len(rows)
+
+          total = 0
+          for b in buckets:
+              bucket = b['id']
+              for obj_name, meta in list_prefix(bucket):
+                  url = base + '/object/' + urllib.parse.quote(bucket, safe='') + '/' + urllib.parse.quote(obj_name, safe='/')
+                  req = urllib.request.Request(url, headers={'Authorization': f'Bearer {key}', 'apikey': key})
+                  dest = root / bucket / pathlib.Path(obj_name)
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  with urllib.request.urlopen(req, timeout=120) as r, open(dest, 'wb') as f:
+                      while True:
+                          chunk = r.read(1024 * 1024)
+                          if not chunk:
+                              break
+                          f.write(chunk)
+                  size = dest.stat().st_size
+                  manifest.append({'bucket': bucket, 'name': obj_name, 'size': size, 'metadata': meta})
+                  total += 1
+
+          (root / '_objects.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding='utf-8')
+          (root / '_count.txt').write_text(str(total) + '\n', encoding='utf-8')
+          print(f'Download concluído: {total} objetos')
+          PY
+
+      - name: Validar integridade mínima
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s backup/database/schema.sql
+          test -s backup/database/data.sql
+          test -s backup/database/roles.sql
+          test -s backup/github/sacproh-full-history.bundle
+          test -s backup/github/sacproh-main.zip
+          test -s backup/storage/_objects.json
+          count="$(cat backup/storage/_count.txt)"
+          echo "Objetos físicos baixados: $count"
+          if [ "$count" -lt 1 ]; then
+            echo "Nenhum objeto físico foi baixado; backup considerado incompleto."
+            exit 1
+          fi
+
+      - name: Gerar manifesto e checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          find backup -type f -print0 | sort -z | xargs -0 sha256sum > backup/SHA256SUMS.txt
+          du -ah backup | sort -h > backup/metadata/sizes.txt
+          find backup -type f | sort > backup/metadata/files.txt
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, datetime
+          root = pathlib.Path('backup')
+          manifest = {
+              'project_ref': os.environ['PROJECT_REF'],
+              'generated_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'git_commit': subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+              'storage_objects': int((root/'storage/_count.txt').read_text().strip()),
+              'file_count': sum(1 for p in root.rglob('*') if p.is_file()),
+              'includes': ['database schema', 'database data', 'roles', 'auth schema/data', 'storage metadata', 'physical storage objects', 'git main snapshot', 'git full history bundle', 'supabase source/migrations', 'function inventory'],
+              'excludes_by_design': ['plaintext runtime secrets/API keys']
+          }
+          (root/'MANIFEST.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding='utf-8')
+          PY
+          sha256sum backup/MANIFEST.json >> backup/SHA256SUMS.txt
+          zip -q -r SACPROH_BACKUP_INTEGRAL.zip backup
+          sha256sum SACPROH_BACKUP_INTEGRAL.zip > SACPROH_BACKUP_INTEGRAL.zip.sha256
+
+      - name: Publicar artifact protegido
+        uses: actions/upload-artifact@v4
+        with:
+          name: SACPROH_BACKUP_INTEGRAL
+          path: |
+            SACPROH_BACKUP_INTEGRAL.zip
+            SACPROH_BACKUP_INTEGRAL.zip.sha256
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
